@@ -12,13 +12,18 @@ import {
 
 import { AddResourceSheet } from "@/components/resources/add-resource-sheet"
 import { AddResourceTrigger } from "@/components/resources/add-resource-trigger"
+import { AuthRequiredDialog } from "@/components/resources/auth-required-dialog"
 import { DraggableResourceCard } from "@/components/resources/draggable-resource-card"
 import { EditResourceSheet } from "@/components/resources/edit-resource-sheet"
 import { FolderPicker } from "@/components/resources/folder-picker"
 import { FolderRow } from "@/components/resources/folder-row"
 import { ResourceDetail } from "@/components/resources/resource-detail"
 import { ResourceSearch } from "@/components/resources/resource-search"
-import { signInWithGoogle } from "@/lib/auth/client"
+import {
+  clearAuthReturnIntent,
+  readAuthReturnIntent,
+  type AuthActionIntent,
+} from "@/lib/auth/client"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,6 +90,10 @@ type ActionDialogState =
   | { type: "deleteResource"; resource: Resource }
   | null
 
+type AuthDialogState =
+  | { intent: AuthActionIntent; folderId?: string | null; parentFolderId?: string | null }
+  | null
+
 function searchResources(resources: Resource[], query: string): Resource[] {
   const q = query.trim().toLowerCase()
   if (!q) {
@@ -143,6 +152,8 @@ function FolderExplorer({
 
   const [actionDialog, setActionDialog] = React.useState<ActionDialogState>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
+  const [authDialog, setAuthDialog] = React.useState<AuthDialogState>(null)
+  const handledAuthReturnRef = React.useRef(false)
 
   /** Backs a folder row's "Add Resource" menu item — scoped to that folder,
    * regardless of which folder is currently being viewed. */
@@ -152,11 +163,37 @@ function FolderExplorer({
 
   function handleFolderRowAddResource(folderId: string) {
     if (!user) {
-      signInWithGoogle(window.location.pathname)
+      setAuthDialog({ intent: "add-resource", folderId })
       return
     }
     setQuickAddFolderId(folderId)
   }
+
+  function handleNewFolder(parentId: string | null) {
+    if (!user) {
+      setAuthDialog({ intent: "create-folder", parentFolderId: parentId })
+      return
+    }
+    setActionDialog({ type: "newFolder", parentId })
+  }
+
+  React.useEffect(() => {
+    if (!user || handledAuthReturnRef.current) {
+      return
+    }
+
+    const intent = readAuthReturnIntent()
+    if (intent?.action !== "create-folder") {
+      return
+    }
+
+    handledAuthReturnRef.current = true
+    window.setTimeout(
+      () => setActionDialog({ type: "newFolder", parentId: intent.parentFolderId ?? null }),
+      0
+    )
+    router.replace(clearAuthReturnIntent(), { scroll: false })
+  }, [router, user])
 
   const isSearching = searchQuery.trim().length > 0
   const searchResultsList = React.useMemo(
@@ -294,7 +331,7 @@ function FolderExplorer({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setActionDialog({ type: "newFolder", parentId: currentFolderId })}
+              onClick={() => handleNewFolder(currentFolderId)}
             >
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
               New Folder
@@ -477,11 +514,11 @@ function FolderExplorer({
                     <FolderRow
                       key={folder.id}
                       name={folder.name}
-                      canCreateHere={!!user}
+                      canCreateHere
                       canManage={!!user && folder.createdBy === user.id}
                       onOpen={() => navigateToFolder(folder.id)}
                       onAddResource={() => handleFolderRowAddResource(folder.id)}
-                      onNewSubfolder={() => setActionDialog({ type: "newFolder", parentId: folder.id })}
+                      onNewSubfolder={() => handleNewFolder(folder.id)}
                       onRename={() => setActionDialog({ type: "renameFolder", folder })}
                       onMove={() => setActionDialog({ type: "moveFolder", folder })}
                       onDelete={() => setActionDialog({ type: "deleteFolder", folder })}
@@ -556,6 +593,16 @@ function FolderExplorer({
           onOpenChange={(open) => !open && setQuickAddFolderId(undefined)}
           user={user}
           initialFolderId={quickAddFolderId}
+        />
+      )}
+
+      {authDialog && (
+        <AuthRequiredDialog
+          open={!!authDialog}
+          onOpenChange={(open) => !open && setAuthDialog(null)}
+          intent={authDialog.intent}
+          folderId={authDialog.folderId}
+          parentFolderId={authDialog.parentFolderId}
         />
       )}
 

@@ -3,7 +3,7 @@
 import * as React from "react"
 
 import { AddResourceSheet } from "@/components/resources/add-resource-sheet"
-import { signInWithGoogle } from "@/lib/auth/client"
+import { AuthRequiredDialog } from "@/components/resources/auth-required-dialog"
 import type { AppUser } from "@/lib/auth/user"
 
 /** Pairs a caller-supplied trigger element with the Add Resource Sheet — signs
@@ -19,13 +19,11 @@ function AddResourceTrigger({
   children: (onClick: () => void, isPending: boolean) => React.ReactNode
 }) {
   const [open, setOpen] = React.useState(false)
-  const [isPending, setIsPending] = React.useState(false)
+  const [authDialogOpen, setAuthDialogOpen] = React.useState(false)
 
-  async function handleClick() {
+  function handleClick() {
     if (!user) {
-      setIsPending(true)
-      await signInWithGoogle(window.location.pathname)
-      setIsPending(false)
+      setAuthDialogOpen(true)
       return
     }
     setOpen(true)
@@ -33,7 +31,13 @@ function AddResourceTrigger({
 
   return (
     <>
-      {children(handleClick, isPending)}
+      {children(handleClick, false)}
+      <AuthRequiredDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+        intent="add-resource"
+        folderId={initialFolderId}
+      />
       {user && (
         <AddResourceSheet
           open={open}
