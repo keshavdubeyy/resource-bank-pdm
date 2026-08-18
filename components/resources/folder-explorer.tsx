@@ -437,6 +437,84 @@ function FolderExplorer({
         usage={usage}
       />
 
+      {!isSearching && (
+        <div className="hidden flex-col gap-1 md:flex">
+          <div className="flex items-center gap-2">
+            {breadcrumbPath.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon-lg"
+                aria-label="Back to parent folder"
+                onClick={() =>
+                  navigateToFolder(breadcrumbPath[breadcrumbPath.length - 1].parentFolderId)
+                }
+              >
+                <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+              </Button>
+            )}
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem
+                  onDragOver={(event) => handleDragOverFolder(event, null)}
+                  onDragLeave={handleDragLeaveFolder}
+                  onDrop={(event) => handleDropOnFolder(event, null)}
+                  className={
+                    dragOverTarget === null && draggedItem
+                      ? "rounded-lg bg-accent px-1 ring-1 ring-ring/40"
+                      : undefined
+                  }
+                >
+                  {breadcrumbPath.length > 0 ? (
+                    <BreadcrumbLink
+                      render={<button type="button" onClick={() => navigateToFolder(null)} />}
+                    >
+                      All Resources
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage>All Resources</BreadcrumbPage>
+                  )}
+                </BreadcrumbItem>
+                {breadcrumbPath.map((folder, index) => {
+                  const isLast = index === breadcrumbPath.length - 1
+                  return (
+                    <React.Fragment key={folder.id}>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem
+                        onDragOver={!isLast ? (event) => handleDragOverFolder(event, folder.id) : undefined}
+                        onDragLeave={!isLast ? handleDragLeaveFolder : undefined}
+                        onDrop={!isLast ? (event) => handleDropOnFolder(event, folder.id) : undefined}
+                        className={
+                          dragOverTarget === folder.id && draggedItem
+                            ? "rounded-lg bg-accent px-1 ring-1 ring-ring/40"
+                            : undefined
+                        }
+                      >
+                        {isLast ? (
+                          <BreadcrumbPage>{folder.name}</BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink
+                            render={
+                              <button type="button" onClick={() => navigateToFolder(folder.id)} />
+                            }
+                          >
+                            {folder.name}
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
+                    </React.Fragment>
+                  )
+                })}
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+          {currentFolder?.createdByName && (
+            <p className="pl-1 text-xs text-muted-foreground">
+              Created by {currentFolder.createdByName}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ResourceSearch value={searchQuery} onChange={setSearchQuery} />
         {!isSearching && (
@@ -587,75 +665,6 @@ function FolderExplorer({
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            {breadcrumbPath.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                aria-label="Back to parent folder"
-                onClick={() =>
-                  navigateToFolder(breadcrumbPath[breadcrumbPath.length - 1].parentFolderId)
-                }
-              >
-                <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
-              </Button>
-            )}
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem
-                  onDragOver={(event) => handleDragOverFolder(event, null)}
-                  onDragLeave={handleDragLeaveFolder}
-                  onDrop={(event) => handleDropOnFolder(event, null)}
-                  className={
-                    dragOverTarget === null && draggedItem
-                      ? "rounded-lg bg-accent px-1 ring-1 ring-ring/40"
-                      : undefined
-                  }
-                >
-                  {breadcrumbPath.length > 0 ? (
-                    <BreadcrumbLink
-                      render={<button type="button" onClick={() => navigateToFolder(null)} />}
-                    >
-                      All Resources
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>All Resources</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-                {breadcrumbPath.map((folder, index) => {
-                  const isLast = index === breadcrumbPath.length - 1
-                  return (
-                    <React.Fragment key={folder.id}>
-                      <BreadcrumbSeparator />
-                      <BreadcrumbItem
-                        onDragOver={!isLast ? (event) => handleDragOverFolder(event, folder.id) : undefined}
-                        onDragLeave={!isLast ? handleDragLeaveFolder : undefined}
-                        onDrop={!isLast ? (event) => handleDropOnFolder(event, folder.id) : undefined}
-                        className={
-                          dragOverTarget === folder.id && draggedItem
-                            ? "rounded-lg bg-accent px-1 ring-1 ring-ring/40"
-                            : undefined
-                        }
-                      >
-                        {isLast ? (
-                          <BreadcrumbPage>{folder.name}</BreadcrumbPage>
-                        ) : (
-                          <BreadcrumbLink
-                            render={
-                              <button type="button" onClick={() => navigateToFolder(folder.id)} />
-                            }
-                          >
-                            {folder.name}
-                          </BreadcrumbLink>
-                        )}
-                      </BreadcrumbItem>
-                    </React.Fragment>
-                  )
-                })}
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-
           {currentSubfolders.length === 0 && currentResources.length === 0 ? (
             <Empty>
               <EmptyHeader>
@@ -680,41 +689,42 @@ function FolderExplorer({
           ) : (
             <div className="flex flex-col gap-6">
               {currentSubfolders.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {currentSubfolders.map((folder) => (
-                    <FolderRow
-                      key={folder.id}
-                      name={folder.name}
-                      folderCount={childrenMap.get(folder.id)?.length ?? 0}
-                      resourceCount={resourceCountsByFolder.get(folder.id) ?? 0}
-                      canCreateHere
-                      canManage={!!user && folder.createdBy === user.id}
-                      onOpen={() => navigateToFolder(folder.id)}
-                      onShare={() => handleShareFolder(folder)}
-                      onAddResource={() => handleFolderRowAddResource(folder.id)}
-                      onNewSubfolder={() => handleNewFolder(folder.id)}
-                      onRename={() => setActionDialog({ type: "renameFolder", folder })}
-                      onMove={() => setActionDialog({ type: "moveFolder", folder })}
-                      onDelete={() => setActionDialog({ type: "deleteFolder", folder })}
-                      onDragStart={(event) => {
-                        event.dataTransfer.effectAllowed = "move"
-                        event.dataTransfer.setData("text/plain", folder.id)
-                        setDraggedItem({ type: "folder", id: folder.id })
-                      }}
-                      isDragOver={dragOverTarget === folder.id}
-                      onDragOver={(event) => handleDragOverFolder(event, folder.id)}
-                      onDragLeave={handleDragLeaveFolder}
-                      onDrop={(event) => handleDropOnFolder(event, folder.id)}
-                    />
-                  ))}
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-sm font-medium text-muted-foreground">Folders</h2>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {currentSubfolders.map((folder) => (
+                      <FolderRow
+                        key={folder.id}
+                        name={folder.name}
+                        folderCount={childrenMap.get(folder.id)?.length ?? 0}
+                        resourceCount={resourceCountsByFolder.get(folder.id) ?? 0}
+                        canCreateHere
+                        canManage={!!user && folder.createdBy === user.id}
+                        onOpen={() => navigateToFolder(folder.id)}
+                        onShare={() => handleShareFolder(folder)}
+                        onAddResource={() => handleFolderRowAddResource(folder.id)}
+                        onNewSubfolder={() => handleNewFolder(folder.id)}
+                        onRename={() => setActionDialog({ type: "renameFolder", folder })}
+                        onMove={() => setActionDialog({ type: "moveFolder", folder })}
+                        onDelete={() => setActionDialog({ type: "deleteFolder", folder })}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "move"
+                          event.dataTransfer.setData("text/plain", folder.id)
+                          setDraggedItem({ type: "folder", id: folder.id })
+                        }}
+                        isDragOver={dragOverTarget === folder.id}
+                        onDragOver={(event) => handleDragOverFolder(event, folder.id)}
+                        onDragLeave={handleDragLeaveFolder}
+                        onDrop={(event) => handleDropOnFolder(event, folder.id)}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
 
               {currentResources.length > 0 && (
                 <div className="flex flex-col gap-3">
-                  {currentFolderId === null && (
-                    <h2 className="text-sm font-medium text-muted-foreground">Unfiled</h2>
-                  )}
+                  <h2 className="text-sm font-medium text-muted-foreground">Resources</h2>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {currentResources.map((resource) => (
                       <DraggableResourceCard

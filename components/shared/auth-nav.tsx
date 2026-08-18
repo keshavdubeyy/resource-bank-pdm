@@ -1,12 +1,7 @@
 "use client"
 
-import { HugeiconsIcon } from "@hugeicons/react"
-import { Add01Icon } from "@hugeicons/core-free-icons"
-
-import { AddResourceTrigger } from "@/components/resources/add-resource-trigger"
 import { AccountMenuContent } from "@/components/shared/account-menu-content"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,15 +32,6 @@ function AuthNav({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <AddResourceTrigger user={user}>
-        {(onClick, isPending) => (
-          <Button size="lg" onClick={onClick} disabled={isPending}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
-            Add Resource
-          </Button>
-        )}
-      </AddResourceTrigger>
-
       {user && (
         <DropdownMenu>
           <DropdownMenuTrigger

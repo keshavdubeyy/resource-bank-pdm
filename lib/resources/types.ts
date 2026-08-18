@@ -48,6 +48,8 @@ export interface FolderRow {
   name: string
   parentFolderId: string | null
   createdBy: string | null
+  /** Display name captured at creation time — null for folders created before this was tracked. */
+  createdByName: string | null
   createdAt: string
 }
 

@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -38,9 +39,30 @@ function SiteHeaderBar({
       >
         <Link
           href="/browse"
-          className={cn("text-sm font-semibold tracking-tight", isBrowseRoute && "hidden md:block")}
+          className={cn(
+            "flex items-center focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30",
+            isBrowseRoute && "hidden md:flex"
+          )}
         >
-          PDM Resource Hub
+          <Image
+            src="/pdm-logo-color.svg"
+            alt=""
+            width={379}
+            height={337}
+            className="h-9 w-auto dark:hidden"
+            aria-hidden="true"
+            priority
+          />
+          <Image
+            src="/pdm-logo-white.svg"
+            alt=""
+            width={379}
+            height={337}
+            className="hidden h-9 w-auto dark:block"
+            aria-hidden="true"
+            priority
+          />
+          <span className="sr-only">PDM Resource Hub</span>
         </Link>
 
         <div className="hidden md:block">

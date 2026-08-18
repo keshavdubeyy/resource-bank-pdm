@@ -1,5 +1,4 @@
 import { FolderExplorer } from "@/components/resources/folder-explorer"
-import { PageHeader } from "@/components/shared/page-header"
 import { DatabaseErrorFallback } from "@/components/shared/database-error-fallback"
 import { getCurrentUser } from "@/lib/auth/user"
 import { getAllFolders } from "@/lib/resources/folder-actions"
@@ -29,13 +28,7 @@ export default async function BrowsePage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:gap-8 sm:px-6 sm:py-12 lg:px-8">
-      <div className="hidden md:block">
-        <PageHeader
-          title="Browse Folders"
-          description="Organize resources into your own folders — create, rename, move, and drag things around like a shared Drive."
-        />
-      </div>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:gap-8 sm:px-6 sm:py-6 lg:px-8">
       {"error" in result ? (
         <DatabaseErrorFallback error={result.error} />
       ) : (

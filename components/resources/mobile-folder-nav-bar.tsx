@@ -2,6 +2,8 @@
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ArrowLeft01Icon, MoreVerticalIcon } from "@hugeicons/core-free-icons"
+import Image from "next/image"
+import Link from "next/link"
 
 import { MobileAccountMenu } from "@/components/shared/mobile-account-menu"
 import { Button } from "@/components/ui/button"
@@ -40,13 +42,36 @@ function MobileFolderNavBar({
   usage: SupabaseUsage | null
 }) {
   return (
-    <div className="sticky top-0 z-40 -mx-4 -mt-4 flex h-14 items-center gap-1 border-b border-border bg-background/95 px-2 backdrop-blur supports-backdrop-filter:bg-background/60 sm:-mx-6 sm:-mt-12 md:hidden">
+    <div className="sticky top-0 z-40 -mx-4 -mt-4 flex h-14 items-center gap-1 border-b border-border bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/60 sm:-mx-6 sm:-mt-12 sm:px-6 md:hidden">
       {currentFolder ? (
         <Button variant="ghost" size="icon-lg" aria-label="Back to parent folder" onClick={onBack}>
           <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
         </Button>
       ) : (
-        <div className="size-9 shrink-0" />
+        <Link
+          href="/browse"
+          className="flex h-9 w-10 shrink-0 items-center focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+        >
+          <Image
+            src="/pdm-logo-color.svg"
+            alt=""
+            width={379}
+            height={337}
+            className="h-8 w-auto dark:hidden"
+            aria-hidden="true"
+            priority
+          />
+          <Image
+            src="/pdm-logo-white.svg"
+            alt=""
+            width={379}
+            height={337}
+            className="hidden h-8 w-auto dark:block"
+            aria-hidden="true"
+            priority
+          />
+          <span className="sr-only">PDM Resource Hub</span>
+        </Link>
       )}
 
       <h1 className="flex-1 truncate text-center text-base font-semibold">
@@ -60,6 +85,14 @@ function MobileFolderNavBar({
             <span className="sr-only">Folder actions</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {currentFolder.createdByName && (
+              <>
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                  Created by {currentFolder.createdByName}
+                </div>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
             {canManage && (
               <>

@@ -16,7 +16,18 @@ interface DbFolder {
   name: string
   parent_folder_id: string | null
   created_by: string | null
+  created_by_name?: string | null
   created_at: string
+}
+
+const BASE_FOLDER_COLUMNS = "id, name, parent_folder_id, created_by, created_at"
+const FOLDER_COLUMNS_WITH_CREATOR_NAME = `${BASE_FOLDER_COLUMNS}, created_by_name`
+let hasCreatorNameColumn: boolean | null = null
+
+function isMissingCreatorNameColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  const message = error.message?.toLowerCase() ?? ""
+  return error.code === "42703" || (message.includes("created_by_name") && message.includes("column"))
 }
 
 function mapDbFolder(row: DbFolder): FolderRow {
@@ -25,6 +36,7 @@ function mapDbFolder(row: DbFolder): FolderRow {
     name: row.name,
     parentFolderId: row.parent_folder_id,
     createdBy: row.created_by,
+    createdByName: row.created_by_name ?? null,
     createdAt: row.created_at,
   }
 }
@@ -34,20 +46,43 @@ async function getServerClient() {
   return createClient(cookieStore)
 }
 
+async function selectFolders(supabase: Awaited<ReturnType<typeof getServerClient>>): Promise<DbFolder[]> {
+  if (hasCreatorNameColumn !== false) {
+    const result = await supabase
+      .from("folders")
+      .select(FOLDER_COLUMNS_WITH_CREATOR_NAME)
+      .order("name", { ascending: true })
+
+    if (!result.error) {
+      hasCreatorNameColumn = true
+      return result.data as DbFolder[]
+    }
+
+    if (!isMissingCreatorNameColumnError(result.error)) {
+      throw new Error(`Failed to load folders: ${result.error.message}`)
+    }
+
+    hasCreatorNameColumn = false
+  }
+
+  const fallback = await supabase
+    .from("folders")
+    .select(BASE_FOLDER_COLUMNS)
+    .order("name", { ascending: true })
+
+  if (fallback.error) {
+    throw new Error(`Failed to load folders: ${fallback.error.message}`)
+  }
+
+  return fallback.data as DbFolder[]
+}
+
 /** One flat fetch — callable from Server Components (initial /browse load) and
  * from Client Components (the Add Resource Sheet's lazy folder-picker fetch). */
 export async function getAllFolders(): Promise<FolderRow[]> {
   const supabase = await getServerClient()
-  const { data, error } = await supabase
-    .from("folders")
-    .select("id, name, parent_folder_id, created_by, created_at")
-    .order("name", { ascending: true })
-
-  if (error) {
-    throw new Error(`Failed to load folders: ${error.message}`)
-  }
-
-  return (data as DbFolder[]).map(mapDbFolder)
+  const folders = await selectFolders(supabase)
+  return folders.map(mapDbFolder)
 }
 
 export async function createFolderAction(
@@ -65,18 +100,51 @@ export async function createFolderAction(
   }
 
   const supabase = await getServerClient()
-  const { data, error } = await supabase
-    .from("folders")
-    .insert({ name: trimmed, parent_folder_id: parentFolderId, created_by: user.id })
-    .select("id, name, parent_folder_id, created_by, created_at")
-    .single()
-
-  if (error || !data) {
-    return { ok: false, error: error?.message ?? "Failed to create the folder." }
+  const insertPayload = {
+    name: trimmed,
+    parent_folder_id: parentFolderId,
+    created_by: user.id,
   }
 
-  revalidatePath("/browse")
-  return { ok: true, folder: mapDbFolder(data as DbFolder) }
+  if (hasCreatorNameColumn !== false) {
+    const { data, error } = await supabase
+      .from("folders")
+      .insert({
+        ...insertPayload,
+        created_by_name: user.name,
+      })
+      .select(FOLDER_COLUMNS_WITH_CREATOR_NAME)
+      .single()
+
+    if (!error && data) {
+      hasCreatorNameColumn = true
+      revalidatePath("/browse")
+      return { ok: true, folder: mapDbFolder(data as DbFolder) }
+    }
+
+    if (!isMissingCreatorNameColumnError(error)) {
+      return { ok: false, error: error?.message ?? "Failed to create the folder." }
+    }
+
+    hasCreatorNameColumn = false
+  }
+
+  if (hasCreatorNameColumn === false) {
+    const fallback = await supabase
+      .from("folders")
+      .insert(insertPayload)
+      .select(BASE_FOLDER_COLUMNS)
+      .single()
+
+    if (fallback.error || !fallback.data) {
+      return { ok: false, error: fallback.error?.message ?? "Failed to create the folder." }
+    }
+
+    revalidatePath("/browse")
+    return { ok: true, folder: mapDbFolder(fallback.data as DbFolder) }
+  }
+
+  return { ok: false, error: "Failed to create the folder." }
 }
 
 export async function renameFolderAction(folderId: string, name: string): Promise<SimpleResult> {
@@ -124,15 +192,14 @@ export async function moveFolderAction(
   const supabase = await getServerClient()
 
   if (newParentId) {
-    const { data, error: fetchError } = await supabase
-      .from("folders")
-      .select("id, name, parent_folder_id, created_by, created_at")
-
-    if (fetchError) {
-      return { ok: false, error: fetchError.message }
+    let folders: DbFolder[]
+    try {
+      folders = await selectFolders(supabase)
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Failed to load folders." }
     }
 
-    const descendants = getDescendantIds((data as DbFolder[]).map(mapDbFolder), folderId)
+    const descendants = getDescendantIds(folders.map(mapDbFolder), folderId)
     if (descendants.has(newParentId)) {
       return { ok: false, error: "A folder can't be moved into one of its own subfolders." }
     }
