@@ -95,7 +95,7 @@ function FeedbackSection() {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button size="sm">Submit a resource</Button>
+            <Button size="lg">Submit a resource</Button>
           </EmptyContent>
         </Empty>
       </DsExample>

@@ -9,7 +9,7 @@ export default async function MyResourcesPage() {
 
   if (!user) {
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-4 sm:gap-8 sm:px-6 sm:py-12 lg:px-8">
         <PageHeader
           title="My Resources"
           description="Sign in to see the resources you've contributed."
@@ -26,7 +26,7 @@ export default async function MyResourcesPage() {
   const resources = await getMyResources(user.id)
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:gap-8 sm:px-6 sm:py-12 lg:px-8">
       <PageHeader
         title="My Resources"
         description="Resources you've contributed to the hub. Edit or remove anything that's out of date."

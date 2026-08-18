@@ -20,8 +20,8 @@ function ResourceSearch({
       <InputGroupInput
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Search resources by title or contributor..."
-        aria-label="Search resources"
+        placeholder="Search resources, folders, or contributors..."
+        aria-label="Search resources and folders"
       />
     </InputGroup>
   )

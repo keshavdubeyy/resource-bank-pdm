@@ -34,7 +34,6 @@ export interface DbResource {
   created_by: string | null
   date_added: string
   folder_id: string | null
-  preview_image_url: string | null
   resource_links: DbResourceLink[]
 }
 
@@ -57,7 +56,6 @@ export function mapDbResource(row: DbResource): Resource {
     dateAdded: row.date_added,
     createdBy: row.created_by,
     folderId: row.folder_id,
-    previewImageUrl: row.preview_image_url,
   }
 }
 

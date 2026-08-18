@@ -17,6 +17,7 @@ import { DraggableResourceCard } from "@/components/resources/draggable-resource
 import { EditResourceSheet } from "@/components/resources/edit-resource-sheet"
 import { FolderPicker } from "@/components/resources/folder-picker"
 import { FolderRow } from "@/components/resources/folder-row"
+import { MobileFolderNavBar } from "@/components/resources/mobile-folder-nav-bar"
 import { ResourceDetail } from "@/components/resources/resource-detail"
 import { ResourceSearch } from "@/components/resources/resource-search"
 import {
@@ -51,6 +52,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  Sheet,
+  SheetContent as SheetPanelContent,
+  SheetHeader as SheetPanelHeader,
+  SheetTitle as SheetPanelTitle,
+} from "@/components/ui/sheet"
+import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -60,8 +67,12 @@ import {
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { toast } from "@/components/ui/toast"
+import { useIsMobile } from "@/hooks/use-mobile"
 import type { AppUser } from "@/lib/auth/user"
 import { deleteResourceAction } from "@/lib/resources/actions"
+import { notifySupabaseUsageChanged } from "@/lib/usage/client-events"
+import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 import {
   createFolderAction,
   deleteFolderAction,
@@ -75,6 +86,7 @@ import {
   getDescendantIds,
   getFolderPathLabel,
 } from "@/lib/resources/folder-tree"
+import { buildFolderShareUrl, buildResourceShareUrl, shareOrCopyLink } from "@/lib/resources/share"
 import type { FolderRow as FolderRowType, Resource } from "@/lib/resources/types"
 
 type DraggedItem =
@@ -107,13 +119,34 @@ function searchResources(resources: Resource[], query: string): Resource[] {
   })
 }
 
+function searchFolders(folders: FolderRowType[], query: string): FolderRowType[] {
+  const q = query.trim().toLowerCase()
+  if (!q) {
+    return []
+  }
+  return folders.filter((folder) => folder.name.toLowerCase().includes(q))
+}
+
+function formatSearchResultCount(folderCount: number, resourceCount: number): string {
+  const parts: string[] = []
+  if (folderCount > 0) {
+    parts.push(`${folderCount} folder${folderCount === 1 ? "" : "s"}`)
+  }
+  if (resourceCount > 0) {
+    parts.push(`${resourceCount} resource${resourceCount === 1 ? "" : "s"}`)
+  }
+  return parts.length > 0 ? parts.join(" and ") : "0 results"
+}
+
 function FolderExplorer({
   user,
+  usage,
   resources: initialResources,
   folders: initialFolders,
   currentFolderId,
 }: {
   user: AppUser | null
+  usage: SupabaseUsage | null
   resources: Resource[]
   folders: FolderRowType[]
   /** Sourced from the URL (/browse or /browse/[folderId]) so refresh, back/forward,
@@ -142,8 +175,16 @@ function FolderExplorer({
   }
 
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [selectedResource, setSelectedResource] = React.useState<Resource | null>(null)
-  const [detailOpen, setDetailOpen] = React.useState(false)
+  // A shared resource link (?resource=<slug>) opens straight into that
+  // resource's detail sheet — derived once at mount, not via an effect.
+  const [selectedResource, setSelectedResource] = React.useState<Resource | null>(() => {
+    if (typeof window === "undefined") {
+      return null
+    }
+    const slug = new URLSearchParams(window.location.search).get("resource")
+    return slug ? (resources.find((resource) => resource.slug === slug) ?? null) : null
+  })
+  const [detailOpen, setDetailOpen] = React.useState(selectedResource !== null)
   const [editingResource, setEditingResource] = React.useState<Resource | null>(null)
   const [editOpen, setEditOpen] = React.useState(false)
 
@@ -195,17 +236,45 @@ function FolderExplorer({
     router.replace(clearAuthReturnIntent(), { scroll: false })
   }, [router, user])
 
+  // Strips the one-time `?resource=<slug>` share param back out of the URL
+  // once it's been consumed by the lazy state initializer above — a plain
+  // sync with the browser's URL, so no setState belongs in this effect.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (!params.has("resource")) {
+      return
+    }
+    params.delete("resource")
+    const query = params.toString()
+    router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`, { scroll: false })
+    // Runs once on mount only — this is a one-time cleanup of the initial URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const isSearching = searchQuery.trim().length > 0
   const searchResultsList = React.useMemo(
     () => searchResources(resources, searchQuery),
     [resources, searchQuery]
   )
+  const searchFoldersList = React.useMemo(
+    () => searchFolders(folders, searchQuery),
+    [folders, searchQuery]
+  )
 
   const childrenMap = React.useMemo(() => buildChildrenMap(folders), [folders])
+  const resourceCountsByFolder = React.useMemo(() => {
+    const counts = new Map<string | null, number>()
+    resources.forEach((resource) => {
+      counts.set(resource.folderId, (counts.get(resource.folderId) ?? 0) + 1)
+    })
+    return counts
+  }, [resources])
   const breadcrumbPath = React.useMemo(
     () => getBreadcrumbPath(folders, currentFolderId),
     [folders, currentFolderId]
   )
+  const currentFolder = breadcrumbPath.at(-1) ?? null
+  const canManageCurrentFolder = !!user && currentFolder?.createdBy === user.id
   const currentSubfolders = childrenMap.get(currentFolderId) ?? []
   const currentResources = React.useMemo(
     () => resources.filter((resource) => resource.folderId === currentFolderId),
@@ -224,6 +293,38 @@ function FolderExplorer({
     setDetailOpen(false)
     setEditingResource(resource)
     setEditOpen(true)
+  }
+
+  async function handleShareFolder(folder: FolderRowType) {
+    const result = await shareOrCopyLink({
+      title: folder.name,
+      url: buildFolderShareUrl(folder.id),
+    })
+    if (result.ok && result.method === "copy") {
+      toast.add({
+        title: "Link copied",
+        description: `Share this link to "${folder.name}".`,
+        type: "success",
+      })
+    } else if (!result.ok) {
+      toast.add({ title: "Couldn't share link", type: "error" })
+    }
+  }
+
+  async function handleShareResource(resource: Resource) {
+    const result = await shareOrCopyLink({
+      title: resource.title,
+      url: buildResourceShareUrl(resource.slug),
+    })
+    if (result.ok && result.method === "copy") {
+      toast.add({
+        title: "Link copied",
+        description: `Share this link to "${resource.title}".`,
+        type: "success",
+      })
+    } else if (!result.ok) {
+      toast.add({ title: "Couldn't share link", type: "error" })
+    }
   }
 
   function isValidDropTarget(targetFolderId: string | null): boolean {
@@ -320,17 +421,29 @@ function FolderExplorer({
     }
     setResources((prev) => prev.filter((r) => r.id !== resource.id))
     setActionDialog(null)
+    notifySupabaseUsageChanged()
   }
 
   return (
     <div className="flex flex-col gap-6">
+      <MobileFolderNavBar
+        currentFolder={currentFolder}
+        canManage={canManageCurrentFolder}
+        onBack={() => currentFolder && navigateToFolder(currentFolder.parentFolderId)}
+        onShare={() => currentFolder && handleShareFolder(currentFolder)}
+        onRename={() => currentFolder && setActionDialog({ type: "renameFolder", folder: currentFolder })}
+        onDelete={() => currentFolder && setActionDialog({ type: "deleteFolder", folder: currentFolder })}
+        user={user}
+        usage={usage}
+      />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ResourceSearch value={searchQuery} onChange={setSearchQuery} />
         {!isSearching && (
           <div className="flex gap-2">
             <Button
               variant="outline"
-              size="sm"
+              size="lg"
               onClick={() => handleNewFolder(currentFolderId)}
             >
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
@@ -338,7 +451,7 @@ function FolderExplorer({
             </Button>
             <AddResourceTrigger user={user} initialFolderId={addResourceFolderId}>
               {(onClick, isPending) => (
-                <Button size="sm" onClick={onClick} disabled={isPending}>
+                <Button size="lg" onClick={onClick} disabled={isPending}>
                   <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
                   Add Resource
                 </Button>
@@ -351,7 +464,7 @@ function FolderExplorer({
       {actionError && (
         <div className="flex items-center justify-between gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <span>{actionError}</span>
-          <Button variant="ghost" size="xs" onClick={() => setActionError(null)}>
+          <Button variant="ghost" size="lg" onClick={() => setActionError(null)}>
             Dismiss
           </Button>
         </div>
@@ -361,56 +474,114 @@ function FolderExplorer({
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">
-              {searchResultsList.length} result{searchResultsList.length === 1 ? "" : "s"} for &quot;
+              {formatSearchResultCount(searchFoldersList.length, searchResultsList.length)} for &quot;
               {searchQuery.trim()}&quot;
             </p>
-            <Button variant="ghost" size="sm" onClick={() => setSearchQuery("")}>
+            <Button variant="ghost" size="lg" onClick={() => setSearchQuery("")}>
               Clear search
             </Button>
           </div>
 
-          {searchResultsList.length === 0 ? (
+          {searchFoldersList.length === 0 && searchResultsList.length === 0 ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={SearchRemoveIcon} strokeWidth={2} />
                 </EmptyMedia>
-                <EmptyTitle>No resources match your search</EmptyTitle>
+                <EmptyTitle>Nothing matches your search</EmptyTitle>
                 <EmptyDescription>
-                  Search looks across every folder, so try a different term.
+                  Search looks across every folder and resource, so try a different term.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {searchResultsList.map((resource) => (
-                <div key={resource.id} className="flex flex-col gap-1.5">
-                  <DraggableResourceCard
-                    resource={resource}
-                    isOwner={!!user && resource.createdBy === user.id}
-                    onSelect={handleSelectResource}
-                    onEdit={() => handleEditResource(resource)}
-                    onMove={() => setActionDialog({ type: "moveResource", resource })}
-                    onDelete={() => setActionDialog({ type: "deleteResource", resource })}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move"
-                      event.dataTransfer.setData("text/plain", resource.id)
-                      setDraggedItem({ type: "resource", id: resource.id })
-                    }}
-                    onDragEnd={() => setDraggedItem(null)}
-                  />
-                  <button
-                    type="button"
-                    className="truncate px-1 text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
-                    onClick={() => {
-                      setSearchQuery("")
-                      navigateToFolder(resource.folderId)
-                    }}
-                  >
-                    {getFolderPathLabel(folders, resource.folderId)}
-                  </button>
+            <div className="flex flex-col gap-6">
+              {searchFoldersList.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-sm font-medium text-muted-foreground">Folders</h2>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {searchFoldersList.map((folder) => (
+                      <div key={folder.id} className="flex flex-col gap-1.5">
+                        <FolderRow
+                          name={folder.name}
+                          folderCount={childrenMap.get(folder.id)?.length ?? 0}
+                          resourceCount={resourceCountsByFolder.get(folder.id) ?? 0}
+                          canCreateHere
+                          canManage={!!user && folder.createdBy === user.id}
+                          onOpen={() => {
+                            setSearchQuery("")
+                            navigateToFolder(folder.id)
+                          }}
+                          onShare={() => handleShareFolder(folder)}
+                          onAddResource={() => handleFolderRowAddResource(folder.id)}
+                          onNewSubfolder={() => handleNewFolder(folder.id)}
+                          onRename={() => setActionDialog({ type: "renameFolder", folder })}
+                          onMove={() => setActionDialog({ type: "moveFolder", folder })}
+                          onDelete={() => setActionDialog({ type: "deleteFolder", folder })}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = "move"
+                            event.dataTransfer.setData("text/plain", folder.id)
+                            setDraggedItem({ type: "folder", id: folder.id })
+                          }}
+                          isDragOver={dragOverTarget === folder.id}
+                          onDragOver={(event) => handleDragOverFolder(event, folder.id)}
+                          onDragLeave={handleDragLeaveFolder}
+                          onDrop={(event) => handleDropOnFolder(event, folder.id)}
+                        />
+                        <button
+                          type="button"
+                          className="truncate px-1 text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
+                          onClick={() => {
+                            setSearchQuery("")
+                            navigateToFolder(folder.parentFolderId)
+                          }}
+                        >
+                          {getFolderPathLabel(folders, folder.parentFolderId)}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {searchResultsList.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  {searchFoldersList.length > 0 && (
+                    <h2 className="text-sm font-medium text-muted-foreground">Resources</h2>
+                  )}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {searchResultsList.map((resource) => (
+                      <div key={resource.id} className="flex flex-col gap-1.5">
+                        <DraggableResourceCard
+                          resource={resource}
+                          isOwner={!!user && resource.createdBy === user.id}
+                          onSelect={handleSelectResource}
+                          onShare={() => handleShareResource(resource)}
+                          onEdit={() => handleEditResource(resource)}
+                          onMove={() => setActionDialog({ type: "moveResource", resource })}
+                          onDelete={() => setActionDialog({ type: "deleteResource", resource })}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = "move"
+                            event.dataTransfer.setData("text/plain", resource.id)
+                            setDraggedItem({ type: "resource", id: resource.id })
+                          }}
+                          onDragEnd={() => setDraggedItem(null)}
+                        />
+                        <button
+                          type="button"
+                          className="truncate px-1 text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
+                          onClick={() => {
+                            setSearchQuery("")
+                            navigateToFolder(resource.folderId)
+                          }}
+                        >
+                          {getFolderPathLabel(folders, resource.folderId)}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -420,7 +591,7 @@ function FolderExplorer({
             {breadcrumbPath.length > 0 && (
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon-lg"
                 aria-label="Back to parent folder"
                 onClick={() =>
                   navigateToFolder(breadcrumbPath[breadcrumbPath.length - 1].parentFolderId)
@@ -514,9 +685,12 @@ function FolderExplorer({
                     <FolderRow
                       key={folder.id}
                       name={folder.name}
+                      folderCount={childrenMap.get(folder.id)?.length ?? 0}
+                      resourceCount={resourceCountsByFolder.get(folder.id) ?? 0}
                       canCreateHere
                       canManage={!!user && folder.createdBy === user.id}
                       onOpen={() => navigateToFolder(folder.id)}
+                      onShare={() => handleShareFolder(folder)}
                       onAddResource={() => handleFolderRowAddResource(folder.id)}
                       onNewSubfolder={() => handleNewFolder(folder.id)}
                       onRename={() => setActionDialog({ type: "renameFolder", folder })}
@@ -548,6 +722,7 @@ function FolderExplorer({
                         resource={resource}
                         isOwner={!!user && resource.createdBy === user.id}
                         onSelect={handleSelectResource}
+                        onShare={() => handleShareResource(resource)}
                         onEdit={() => handleEditResource(resource)}
                         onMove={() => setActionDialog({ type: "moveResource", resource })}
                         onDelete={() => setActionDialog({ type: "deleteResource", resource })}
@@ -767,6 +942,7 @@ function FolderNameDialog({
   initialName: string
   onSubmit: (name: string) => Promise<{ ok: boolean; error?: string }>
 }) {
+  const isMobile = useIsMobile()
   const [name, setName] = React.useState(initialName)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -796,35 +972,52 @@ function FolderNameDialog({
     onOpenChange(false)
   }
 
+  const form = (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <Input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        placeholder="Folder name"
+        autoFocus
+      />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting && <Spinner data-icon="inline-start" />}
+          {isSubmitting ? "Saving…" : "Save"}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetPanelContent side="bottom" className="max-h-[85dvh] w-full rounded-t-3xl">
+          <SheetPanelHeader className="p-4 pb-3">
+            <SheetPanelTitle>{title}</SheetPanelTitle>
+          </SheetPanelHeader>
+          <div className="px-4 pb-4">{form}</div>
+        </SheetPanelContent>
+      </Sheet>
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Folder name"
-            autoFocus
-          />
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Spinner data-icon="inline-start" />}
-              {isSubmitting ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </form>
+        {form}
       </DialogContent>
     </Dialog>
   )

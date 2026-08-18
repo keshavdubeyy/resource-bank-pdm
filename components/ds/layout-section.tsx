@@ -40,7 +40,7 @@ function LayoutSection() {
       >
         <div className="flex w-full max-w-sm flex-col gap-3">
           <Button
-            size="sm"
+            size="lg"
             variant="outline"
             className="self-start"
             onClick={() =>

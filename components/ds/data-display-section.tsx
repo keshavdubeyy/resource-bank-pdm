@@ -101,8 +101,8 @@ function DataDisplaySection() {
             </p>
           </CardContent>
           <CardFooter className="gap-2 border-t">
-            <Button size="sm">Read guide</Button>
-            <Button size="sm" variant="outline">
+            <Button size="lg">Read guide</Button>
+            <Button size="lg" variant="outline">
               Save
             </Button>
           </CardFooter>
@@ -191,7 +191,7 @@ function DataDisplaySection() {
               </ItemDescription>
             </ItemContent>
             <ItemActions>
-              <Button size="sm" variant="outline">
+              <Button size="lg" variant="outline">
                 Open
               </Button>
             </ItemActions>
@@ -309,7 +309,7 @@ function DataDisplaySection() {
         <Collapsible defaultOpen className="w-full max-w-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium">3 related resources</p>
-            <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
+            <CollapsibleTrigger render={<Button variant="ghost" size="lg" />}>
               Toggle
             </CollapsibleTrigger>
           </div>

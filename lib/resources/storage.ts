@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/client"
+import { notifySupabaseUsageChanged } from "@/lib/usage/client-events"
 
 export const RESOURCE_FILES_BUCKET = "resource-files"
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -26,6 +27,26 @@ export function getUploadKind(file: File): UploadKind | null {
 
 export function isUploadedResourceFileUrl(url: string): boolean {
   return url.includes(`/storage/v1/object/public/${RESOURCE_FILES_BUCKET}/`)
+}
+
+function getResourceFilePath(url: string): string | null {
+  const marker = `/storage/v1/object/public/${RESOURCE_FILES_BUCKET}/`
+  const index = url.indexOf(marker)
+
+  if (index === -1) {
+    return null
+  }
+
+  const path = url.slice(index + marker.length)
+  if (!path) {
+    return null
+  }
+
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
 }
 
 /** For an already-saved storage URL, guesses pdf vs image from its extension (for display only). */
@@ -59,5 +80,22 @@ export async function uploadResourceFile(
   }
 
   const { data } = supabase.storage.from(RESOURCE_FILES_BUCKET).getPublicUrl(path)
+  notifySupabaseUsageChanged()
   return { ok: true, url: data.publicUrl }
+}
+
+export async function deleteUploadedResourceFiles(urls: string[]) {
+  const paths = Array.from(
+    new Set(urls.map(getResourceFilePath).filter((path): path is string => Boolean(path)))
+  )
+
+  if (paths.length === 0) {
+    return
+  }
+
+  const supabase = createClient()
+  const { error } = await supabase.storage.from(RESOURCE_FILES_BUCKET).remove(paths)
+  if (!error) {
+    notifySupabaseUsageChanged()
+  }
 }

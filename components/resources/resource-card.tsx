@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -27,7 +26,7 @@ function ResourceCard({
 }) {
   const primaryUrl = resource.links[0]?.url
   const iconKind = guessLinkIconKind(primaryUrl)
-  const avatarImageUrl = iconKind ? null : (resource.previewImageUrl ?? getFaviconUrl(primaryUrl))
+  const avatarImageUrl = iconKind ? null : getFaviconUrl(primaryUrl)
 
   return (
     <Card
@@ -54,12 +53,7 @@ function ResourceCard({
               />
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col gap-1.5">
-            <CardTitle className="line-clamp-2">{resource.title}</CardTitle>
-            <CardDescription className="line-clamp-2">
-              {resource.description}
-            </CardDescription>
-          </div>
+          <CardTitle className="line-clamp-2">{resource.title}</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">

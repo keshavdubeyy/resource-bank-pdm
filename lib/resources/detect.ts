@@ -8,7 +8,6 @@ export interface DetectedMetadata {
   title: string | null
   type: ResourceType
   sourceLabel: string | null
-  previewImageUrl: string | null
 }
 
 const COURSE_DOMAINS = [
@@ -79,7 +78,6 @@ async function detectYouTube(url: URL): Promise<DetectedMetadata | null> {
     title: null,
     type: "Video",
     sourceLabel: "YouTube",
-    previewImageUrl: null,
   }
   try {
     const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url.toString())}&format=json`
@@ -87,12 +85,11 @@ async function detectYouTube(url: URL): Promise<DetectedMetadata | null> {
     if (!response.ok) {
       return fallback
     }
-    const data = (await response.json()) as { title?: unknown; thumbnail_url?: unknown }
+    const data = (await response.json()) as { title?: unknown }
     return {
       title: typeof data.title === "string" ? data.title : null,
       type: "Video",
       sourceLabel: "YouTube",
-      previewImageUrl: typeof data.thumbnail_url === "string" ? data.thumbnail_url : null,
     }
   } catch {
     return fallback
@@ -108,7 +105,6 @@ function detectGitHub(url: URL): DetectedMetadata | null {
     title: owner && repo ? `${owner}/${repo}` : null,
     type: "Repository",
     sourceLabel: "GitHub",
-    previewImageUrl: null,
   }
 }
 
@@ -135,7 +131,6 @@ function detectLinkedIn(url: URL): DetectedMetadata | null {
     title: isProfileLike && name ? `${name} · LinkedIn` : null,
     type: "Article",
     sourceLabel: "LinkedIn",
-    previewImageUrl: null,
   }
 }
 
@@ -168,21 +163,12 @@ function extractMetaContent(html: string, property: string): string | null {
   return null
 }
 
-function resolveMaybeRelativeUrl(maybeRelative: string, base: URL): string {
-  try {
-    return new URL(maybeRelative, base).toString()
-  } catch {
-    return maybeRelative
-  }
-}
-
 /** Best-effort — bot-protected sites (Amazon, LinkedIn, etc.) will often return nulls here. */
 async function fetchGenericMetadata(url: URL): Promise<{
   title: string | null
   sourceLabel: string | null
-  previewImageUrl: string | null
 }> {
-  const fallback = { title: null, sourceLabel: url.hostname, previewImageUrl: null }
+  const fallback = { title: null, sourceLabel: url.hostname }
   try {
     const response = await fetch(url.toString(), {
       signal: AbortSignal.timeout(5000),
@@ -201,14 +187,12 @@ async function fetchGenericMetadata(url: URL): Promise<{
 
     const ogTitle = extractMetaContent(html, "og:title")
     const ogSiteName = extractMetaContent(html, "og:site_name")
-    const ogImage = extractMetaContent(html, "og:image")
     const titleTagMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i)
     const title = ogTitle ?? (titleTagMatch ? decodeHtmlEntities(titleTagMatch[1].trim()) : null)
 
     return {
       title: title || null,
       sourceLabel: ogSiteName ?? url.hostname,
-      previewImageUrl: ogImage ? resolveMaybeRelativeUrl(ogImage, url) : null,
     }
   } catch {
     return fallback
@@ -218,7 +202,7 @@ async function fetchGenericMetadata(url: URL): Promise<{
 export async function detectFromUrl(rawUrl: string): Promise<DetectedMetadata> {
   const url = await resolveSafeUrl(rawUrl)
   if (!url) {
-    return { title: null, type: "Article", sourceLabel: null, previewImageUrl: null }
+    return { title: null, type: "Article", sourceLabel: null }
   }
 
   const youtube = await detectYouTube(url)
@@ -243,6 +227,5 @@ export async function detectFromUrl(rawUrl: string): Promise<DetectedMetadata> {
     title: generic.title,
     type: courseType ?? "Article",
     sourceLabel: generic.sourceLabel,
-    previewImageUrl: generic.previewImageUrl,
   }
 }

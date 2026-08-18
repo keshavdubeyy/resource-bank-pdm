@@ -22,7 +22,12 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { detectFromUrl } from "@/lib/resources/detect"
-import { getUploadKind, uploadResourceFile, type UploadStatus } from "@/lib/resources/storage"
+import {
+  deleteUploadedResourceFiles,
+  getUploadKind,
+  uploadResourceFile,
+  type UploadStatus,
+} from "@/lib/resources/storage"
 import {
   OTHER_RESOURCE_TYPES,
   PROMINENT_RESOURCE_TYPES,
@@ -41,8 +46,6 @@ export interface AttachmentValue {
   uploadStatus: UploadStatus
   uploadedUrl: string | null
   uploadError: string | null
-  /** Best-effort og:image scraped from the link — null for uploads or sites that block scraping. */
-  previewImageUrl: string | null
 }
 
 export const EMPTY_ATTACHMENT: AttachmentValue = {
@@ -55,7 +58,6 @@ export const EMPTY_ATTACHMENT: AttachmentValue = {
   uploadStatus: "idle",
   uploadedUrl: null,
   uploadError: null,
-  previewImageUrl: null,
 }
 
 function detectFromFile(file: File): { type: ResourceType; title: string } {
@@ -104,11 +106,13 @@ function AttachmentField({
   onChange,
   userId,
   error,
+  remainingStorageBytes,
 }: {
   value: AttachmentValue
   onChange: (patch: Partial<AttachmentValue>) => void
   userId: string
   error?: string | null
+  remainingStorageBytes?: number | null
 }) {
   const [isDetecting, setIsDetecting] = React.useState(false)
   const [sourceLabel, setSourceLabel] = React.useState<string | null>(null)
@@ -129,6 +133,9 @@ function AttachmentField({
     const generation = ++uploadGenerationRef.current
     uploadResourceFile(userId, file).then((result) => {
       if (uploadGenerationRef.current !== generation) {
+        if (result.ok) {
+          deleteUploadedResourceFiles([result.url])
+        }
         return // file was replaced or removed while this upload was in flight
       }
       onChange(
@@ -157,7 +164,6 @@ function AttachmentField({
           title: result.title?.trim() || fallbackLinkTitle(normalized, result.sourceLabel),
           detectedType: result.type,
           hasDetected: true,
-          previewImageUrl: result.previewImageUrl,
         })
         setSourceLabel(result.sourceLabel)
       } finally {
@@ -184,7 +190,6 @@ function AttachmentField({
       uploadStatus: "uploading",
       uploadedUrl: null,
       uploadError: null,
-      previewImageUrl: null,
     })
     startUpload(file)
   }
@@ -200,6 +205,9 @@ function AttachmentField({
   function handleRemoveFile() {
     uploadGenerationRef.current++
     lastDetectedUrlRef.current = null
+    if (value.file && value.uploadedUrl) {
+      deleteUploadedResourceFiles([value.uploadedUrl])
+    }
     onChange({
       file: null,
       title: "",
@@ -208,7 +216,6 @@ function AttachmentField({
       uploadStatus: "idle",
       uploadedUrl: null,
       uploadError: null,
-      previewImageUrl: null,
     })
   }
 
@@ -220,7 +227,6 @@ function AttachmentField({
       title: "",
       detectedType: "Article",
       hasDetected: false,
-      previewImageUrl: null,
     })
   }
 
@@ -232,8 +238,9 @@ function AttachmentField({
   const typeMatches = normalizedTypeQuery
     ? allTypes.filter((type) => type.toLowerCase().includes(normalizedTypeQuery))
     : []
-  const hasExactTypeMatch = allTypes.some((type) => type.toLowerCase() === normalizedTypeQuery)
-  const canCreateType = trimmedTypeQuery.length > 0 && !hasExactTypeMatch && typeMatches.length === 0
+  // A substring match always includes an exact match of itself, so this alone
+  // covers "no existing value matches at all" — including the exact-match case.
+  const canCreateType = trimmedTypeQuery.length > 0 && typeMatches.length === 0
   // Mirrors exactly what's rendered below, so base-ui's own item bookkeeping
   // (keyboard nav, highlight, ARIA count) stays in sync with the visible list.
   const typeComboboxItems = canCreateType ? [trimmedTypeQuery] : trimmedTypeQuery ? typeMatches : allTypes
@@ -270,6 +277,7 @@ function AttachmentField({
         onRemoveFile={handleRemoveFile}
         onRetryUpload={handleRetryUpload}
         error={attachmentError}
+        remainingStorageBytes={remainingStorageBytes}
       />
 
       {isDetecting && (

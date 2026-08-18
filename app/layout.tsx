@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { Toaster } from "@/components/ui/toast"
 import { SiteHeader } from "@/components/shared/site-header"
 import { SiteFooter } from "@/components/shared/site-footer"
 import { cn } from "@/lib/utils"
@@ -35,11 +36,13 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <TooltipProvider>
-            <div className="relative flex min-h-svh flex-col">
-              <SiteHeader />
-              <main className="flex-1">{children}</main>
-              <SiteFooter />
-            </div>
+            <Toaster>
+              <div className="relative flex min-h-svh flex-col">
+                <SiteHeader />
+                <main className="flex-1">{children}</main>
+                <SiteFooter />
+              </div>
+            </Toaster>
           </TooltipProvider>
         </ThemeProvider>
       </body>

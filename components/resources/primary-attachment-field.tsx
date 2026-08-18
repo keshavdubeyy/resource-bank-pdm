@@ -52,6 +52,7 @@ function PrimaryAttachmentField({
   onRemoveFile,
   onRetryUpload,
   error,
+  remainingStorageBytes,
 }: {
   mode: AttachmentMode
   onModeChange: (mode: AttachmentMode) => void
@@ -65,6 +66,7 @@ function PrimaryAttachmentField({
   onRemoveFile: () => void
   onRetryUpload: () => void
   error?: string
+  remainingStorageBytes?: number | null
 }) {
   const inputId = React.useId()
   const urlInputRef = React.useRef<HTMLInputElement>(null)
@@ -100,6 +102,10 @@ function PrimaryAttachmentField({
     if (selected.size > MAX_UPLOAD_BYTES) {
       setPickError(null)
       setSizeDialogOpen(true)
+      return
+    }
+    if (remainingStorageBytes !== null && remainingStorageBytes !== undefined && selected.size > remainingStorageBytes) {
+      setPickError(`Only ${formatBytes(remainingStorageBytes)} is left in the shared storage pool.`)
       return
     }
     setPickError(null)

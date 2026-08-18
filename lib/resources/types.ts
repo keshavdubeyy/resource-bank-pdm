@@ -72,9 +72,6 @@ export interface Resource {
   createdBy: string | null
   /** The folder this resource is filed in, or null for unfiled/root. */
   folderId: string | null
-  /** Best-effort og:image scraped from the primary link — null for uploads and
-   * for sites (e.g. LinkedIn) that block scraping. */
-  previewImageUrl: string | null
 }
 
 export interface NewResourceInput {
@@ -85,7 +82,6 @@ export interface NewResourceInput {
   type: ResourceType
   whyUseful: string
   links: ResourceLink[]
-  previewImageUrl: string | null
 }
 
 export const RESOURCE_CATEGORIES: ResourceCategory[] = [

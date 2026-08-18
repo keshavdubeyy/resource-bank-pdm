@@ -26,22 +26,54 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile"
 import { guessLinkIconKind } from "@/lib/resources/storage"
 import { CATEGORY_LABELS, type Resource } from "@/lib/resources/types"
-import { getFaviconUrl } from "@/lib/resources/utils"
+import { getFaviconUrl, hasMeaningfulDescription } from "@/lib/resources/utils"
 
 function ResourceDetailBody({ resource }: { resource: Resource }) {
   return (
     <div className="flex flex-col gap-6 px-4 pb-6 sm:px-6">
-      <div className="flex flex-wrap gap-1.5">
-        {resource.category && <Badge>{CATEGORY_LABELS[resource.category]}</Badge>}
-        <Badge variant="outline">{resource.type}</Badge>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-1.5">
+          {resource.category && <Badge>{CATEGORY_LABELS[resource.category]}</Badge>}
+          <Badge variant="outline">{resource.type}</Badge>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-medium">Links</h3>
+          <div className="flex flex-col gap-2">
+            {resource.links.map((link) => {
+              const linkIconKind = guessLinkIconKind(link.url)
+              return (
+                <Button
+                  key={link.url}
+                  variant="outline"
+                  className="justify-start"
+                  nativeButton={false}
+                  render={<a href={link.url} target="_blank" rel="noopener noreferrer" />}
+                >
+                  <HugeiconsIcon
+                    icon={linkIconKind === "image" ? Image01Icon : linkIconKind === "pdf" ? Pdf01Icon : Link04Icon}
+                    strokeWidth={2}
+                    data-icon="inline-start"
+                  />
+                  {link.label}
+                </Button>
+              )
+            })}
+          </div>
+        </div>
       </div>
+
+      {resource.whyUseful && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-1.5">
+            <h3 className="text-sm font-medium">Why it&apos;s useful</h3>
+            <p className="text-sm text-muted-foreground">{resource.whyUseful}</p>
+          </div>
+        </>
+      )}
 
       <Separator />
-
-      <div className="flex flex-col gap-1.5">
-        <h3 className="text-sm font-medium">Why it&apos;s useful</h3>
-        <p className="text-sm text-muted-foreground">{resource.whyUseful}</p>
-      </div>
 
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <HugeiconsIcon icon={UserIcon} strokeWidth={2} className="size-4 shrink-0" />
@@ -50,33 +82,6 @@ function ResourceDetailBody({ resource }: { resource: Resource }) {
           {" · "}
           {format(new Date(resource.dateAdded), "MMM d, yyyy")}
         </span>
-      </div>
-
-      <Separator />
-
-      <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Links</h3>
-        <div className="flex flex-col gap-2">
-          {resource.links.map((link) => {
-            const linkIconKind = guessLinkIconKind(link.url)
-            return (
-              <Button
-                key={link.url}
-                variant="outline"
-                className="justify-start"
-                nativeButton={false}
-                render={<a href={link.url} target="_blank" rel="noopener noreferrer" />}
-              >
-                <HugeiconsIcon
-                  icon={linkIconKind === "image" ? Image01Icon : linkIconKind === "pdf" ? Pdf01Icon : Link04Icon}
-                  strokeWidth={2}
-                  data-icon="inline-start"
-                />
-                {link.label}
-              </Button>
-            )
-          })}
-        </div>
       </div>
     </div>
   )
@@ -111,7 +116,7 @@ function ResourceDetailHeaderActions({ onEdit }: { onEdit?: () => void }) {
     <Button
       type="button"
       variant="outline"
-      size="sm"
+      size="lg"
       className="self-start"
       onClick={onEdit}
     >
@@ -141,7 +146,7 @@ function ResourceDetail({
 
   const primaryUrl = resource.links[0]?.url
   const iconKind = guessLinkIconKind(primaryUrl)
-  const avatarImageUrl = iconKind ? null : (resource.previewImageUrl ?? getFaviconUrl(primaryUrl))
+  const avatarImageUrl = iconKind ? null : getFaviconUrl(primaryUrl)
 
   if (isMobile) {
     return (
@@ -153,7 +158,9 @@ function ResourceDetail({
               <ResourceDetailHeaderActions onEdit={onEdit} />
             </div>
             <DrawerTitle>{resource.title}</DrawerTitle>
-            <DrawerDescription>{resource.description}</DrawerDescription>
+            {hasMeaningfulDescription(resource) && (
+              <DrawerDescription>{resource.description}</DrawerDescription>
+            )}
           </DrawerHeader>
           <ScrollArea className="flex-1">
             <ResourceDetailBody resource={resource} />
@@ -172,7 +179,9 @@ function ResourceDetail({
             <ResourceDetailHeaderActions onEdit={onEdit} />
           </div>
           <SheetTitle>{resource.title}</SheetTitle>
-          <SheetDescription>{resource.description}</SheetDescription>
+          {hasMeaningfulDescription(resource) && (
+            <SheetDescription>{resource.description}</SheetDescription>
+          )}
         </SheetHeader>
         <ScrollArea className="flex-1">
           <ResourceDetailBody resource={resource} />

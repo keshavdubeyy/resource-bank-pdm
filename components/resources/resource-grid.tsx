@@ -37,7 +37,7 @@ function ResourceGrid({
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button variant="outline" size="sm" onClick={onClearFilters}>
+          <Button variant="outline" size="lg" onClick={onClearFilters}>
             Clear all filters
           </Button>
         </EmptyContent>

@@ -184,6 +184,7 @@ function FolderPicker({
   excludeIds,
   value,
   onSelect,
+  listClassName,
 }: {
   folders: FolderRow[]
   onFoldersChange: (folders: FolderRow[]) => void
@@ -191,6 +192,8 @@ function FolderPicker({
   excludeIds?: Set<string>
   value: string | null
   onSelect: (folderId: string | null) => void
+  /** Overrides the tree/results list's max-height — e.g. a taller value when hosted in a mobile bottom sheet with room to spare. */
+  listClassName?: string
 }) {
   const [query, setQuery] = React.useState("")
   const [creating, setCreating] = React.useState(false)
@@ -267,7 +270,12 @@ function FolderPicker({
       />
 
       {isSearching ? (
-        <div className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-2xl border border-border p-2">
+        <div
+          className={cn(
+            "flex max-h-64 flex-col gap-1 overflow-y-auto rounded-2xl border border-border p-2",
+            listClassName
+          )}
+        >
           <SearchResultRow
             label="All Resources"
             selected={value === null}
@@ -287,7 +295,12 @@ function FolderPicker({
           )}
         </div>
       ) : (
-        <div className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-2xl border border-border p-2">
+        <div
+          className={cn(
+            "flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-2xl border border-border p-2",
+            listClassName
+          )}
+        >
           <button
             type="button"
             onClick={() => onSelect(null)}
@@ -335,13 +348,13 @@ function FolderPicker({
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="lg"
               onClick={() => setCreating(false)}
               disabled={isSubmitting}
             >
               Cancel
             </Button>
-            <Button type="button" size="sm" onClick={handleCreate} disabled={isSubmitting}>
+            <Button type="button" size="lg" onClick={handleCreate} disabled={isSubmitting}>
               {isSubmitting ? "Creating…" : "Create"}
             </Button>
           </div>
@@ -350,7 +363,7 @@ function FolderPicker({
         <Button
           type="button"
           variant="outline"
-          size="sm"
+          size="lg"
           onClick={() => setCreating(true)}
           className="self-start"
         >

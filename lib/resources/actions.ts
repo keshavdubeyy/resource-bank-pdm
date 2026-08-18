@@ -12,6 +12,8 @@ import { createClient } from "@/utils/supabase/server"
 
 type ActionResult = { ok: true; resource: Resource } | { ok: false; error: string }
 
+const RESOURCE_FILES_BUCKET = "resource-files"
+
 async function getServerClient() {
   const cookieStore = await cookies()
   return createClient(cookieStore)
@@ -29,8 +31,45 @@ async function generateUniqueSlug(
   return slugify(title, existingSlugs)
 }
 
-function buildDescription(title: string, whyUseful: string): string {
-  return whyUseful.trim() ? truncate(whyUseful, 140) : title
+/** Empty when the contributor left "why useful" blank — never falls back to
+ * the title, so cards/detail views can tell "no note" from "a real note". */
+function buildDescription(whyUseful: string): string {
+  return whyUseful.trim() ? truncate(whyUseful, 140) : ""
+}
+
+function getResourceFilePath(url: string): string | null {
+  const marker = `/storage/v1/object/public/${RESOURCE_FILES_BUCKET}/`
+  const index = url.indexOf(marker)
+
+  if (index === -1) {
+    return null
+  }
+
+  const path = url.slice(index + marker.length)
+  if (!path) {
+    return null
+  }
+
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
+async function removeResourceFiles(supabase: SupabaseClient, urls: string[]) {
+  const paths = Array.from(
+    new Set(urls.map(getResourceFilePath).filter((path): path is string => Boolean(path)))
+  )
+
+  if (paths.length === 0) {
+    return
+  }
+
+  const { error } = await supabase.storage.from(RESOURCE_FILES_BUCKET).remove(paths)
+  if (error) {
+    console.error("Failed to remove resource files:", error)
+  }
 }
 
 export async function createResourceAction(input: NewResourceInput): Promise<ActionResult> {
@@ -47,7 +86,7 @@ export async function createResourceAction(input: NewResourceInput): Promise<Act
     .insert({
       slug,
       title: input.title,
-      description: buildDescription(input.title, input.whyUseful),
+      description: buildDescription(input.whyUseful),
       category: null,
       topic_id: null,
       folder_id: input.folderId,
@@ -58,7 +97,6 @@ export async function createResourceAction(input: NewResourceInput): Promise<Act
       why_useful: input.whyUseful,
       recommended_by: user.name,
       created_by: user.id,
-      preview_image_url: input.previewImageUrl,
     })
     .select("*")
     .single()
@@ -82,6 +120,7 @@ export async function createResourceAction(input: NewResourceInput): Promise<Act
 
   if (linkError || !linkData) {
     await supabase.from("resources").delete().eq("id", resourceRow.id)
+    await removeResourceFiles(supabase, input.links.map((link) => link.url))
     return { ok: false, error: linkError?.message ?? "Failed to save the resource links." }
   }
 
@@ -108,16 +147,25 @@ export async function updateResourceAction(
   }
 
   const supabase = await getServerClient()
+  const { data: existingLinks, error: existingLinksError } = await supabase
+    .from("resource_links")
+    .select("url")
+    .eq("resource_id", resourceId)
+
+  if (existingLinksError) {
+    return { ok: false, error: existingLinksError.message }
+  }
+
+  const previousUrls = (existingLinks ?? []).map((link: { url: string }) => link.url)
 
   const { data: resourceRow, error: resourceError } = await supabase
     .from("resources")
     .update({
       title: input.title,
-      description: buildDescription(input.title, input.whyUseful),
+      description: buildDescription(input.whyUseful),
       folder_id: input.folderId,
       type: input.type,
       why_useful: input.whyUseful,
-      preview_image_url: input.previewImageUrl,
     })
     .eq("id", resourceId)
     .eq("created_by", user.id)
@@ -154,8 +202,19 @@ export async function updateResourceAction(
     .select("id, label, url, position")
 
   if (linkError || !linkData) {
+    const previousUrlSet = new Set(previousUrls)
+    await removeResourceFiles(
+      supabase,
+      input.links.map((link) => link.url).filter((url) => !previousUrlSet.has(url))
+    )
     return { ok: false, error: linkError?.message ?? "Failed to save the resource links." }
   }
+
+  const nextUrls = new Set(input.links.map((link) => link.url))
+  await removeResourceFiles(
+    supabase,
+    previousUrls.filter((url) => !nextUrls.has(url))
+  )
 
   revalidatePath("/resources")
   revalidatePath("/my-resources")
@@ -179,6 +238,15 @@ export async function deleteResourceAction(
   }
 
   const supabase = await getServerClient()
+  const { data: links, error: linksError } = await supabase
+    .from("resource_links")
+    .select("url")
+    .eq("resource_id", resourceId)
+
+  if (linksError) {
+    return { error: linksError.message }
+  }
+
   const { error, count } = await supabase
     .from("resources")
     .delete({ count: "exact" })
@@ -191,6 +259,11 @@ export async function deleteResourceAction(
   if (!count) {
     return { error: "Resource not found, or you don't have permission to delete it." }
   }
+
+  await removeResourceFiles(
+    supabase,
+    (links ?? []).map((link: { url: string }) => link.url)
+  )
 
   revalidatePath("/resources")
   revalidatePath("/my-resources")

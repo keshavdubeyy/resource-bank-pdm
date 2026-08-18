@@ -65,3 +65,12 @@ utils/supabase/      Supabase client, server, and middleware helpers
 ## Supabase Setup
 
 Run the SQL files in `supabase/` in your Supabase project as needed for tables, storage, folders, previews, and permissions. Keep `.env.local` private and do not commit Supabase secrets.
+
+### Usage Indicator
+
+Run `supabase/usage-summary-migration.sql` to enable the profile-menu usage indicator. The app fetches only aggregate live byte counts through `get_usage_summary()`:
+
+- database bytes from Postgres size metadata
+- storage bytes from `storage.objects` file-size metadata
+
+Supabase plan verification is not available from the public browser/server Supabase client. The menu compares usage against Supabase Free plan limits, but it does not claim the current project plan is verified unless a separate server-only Management API integration is added later.

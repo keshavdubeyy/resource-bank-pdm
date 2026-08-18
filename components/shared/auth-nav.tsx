@@ -1,21 +1,19 @@
 "use client"
 
-import Link from "next/link"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon } from "@hugeicons/core-free-icons"
 
 import { AddResourceTrigger } from "@/components/resources/add-resource-trigger"
+import { AccountMenuContent } from "@/components/shared/account-menu-content"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { signOutAction } from "@/lib/auth/actions"
 import type { AppUser } from "@/lib/auth/user"
+import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 
 function initials(name: string): string {
   return (
@@ -30,12 +28,18 @@ function initials(name: string): string {
   )
 }
 
-function AuthNav({ user }: { user: AppUser | null }) {
+function AuthNav({
+  user,
+  usage,
+}: {
+  user: AppUser | null
+  usage: SupabaseUsage | null
+}) {
   return (
     <div className="flex items-center gap-2">
       <AddResourceTrigger user={user}>
         {(onClick, isPending) => (
-          <Button size="sm" onClick={onClick} disabled={isPending}>
+          <Button size="lg" onClick={onClick} disabled={isPending}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
             Add Resource
           </Button>
@@ -58,12 +62,8 @@ function AuthNav({ user }: { user: AppUser | null }) {
             </Avatar>
             <span className="sr-only">Open account menu</span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem render={<Link href="/my-resources" />}>
-              My Resources
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOutAction()}>Sign out</DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-72">
+            <AccountMenuContent user={user} usage={usage} />
           </DropdownMenuContent>
         </DropdownMenu>
       )}

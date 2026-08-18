@@ -38,10 +38,12 @@ import {
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { updateResourceAction } from "@/lib/resources/actions"
 import { getAllFolders } from "@/lib/resources/folder-actions"
 import { getFolderPathLabel } from "@/lib/resources/folder-tree"
 import {
+  deleteUploadedResourceFiles,
   guessUploadKindFromUrl,
   isUploadedResourceFileUrl,
   uploadResourceFile,
@@ -49,6 +51,7 @@ import {
 } from "@/lib/resources/storage"
 import type { FolderRow, Resource, ResourceLink } from "@/lib/resources/types"
 import { isValidUrl, normalizeUrl } from "@/lib/resources/utils"
+import { notifySupabaseUsageChanged } from "@/lib/usage/client-events"
 
 function createRowId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -154,6 +157,7 @@ function EditResourceSheet({
   resource: Resource
 }) {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [form, setForm] = React.useState<FormState>(() => formFromResource(resource))
   const [errors, setErrors] = React.useState<FieldErrors>({})
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -162,6 +166,7 @@ function EditResourceSheet({
   const [folders, setFolders] = React.useState<FolderRow[]>([])
   const [foldersLoaded, setFoldersLoaded] = React.useState(false)
   const uploadGenerationRef = React.useRef(0)
+  const skipNextCloseCleanupRef = React.useRef(false)
 
   const hasPendingUpload =
     form.uploadStatus === "uploading" ||
@@ -176,8 +181,24 @@ function EditResourceSheet({
     }
   }, [open, foldersLoaded])
 
+  function cleanupUnsavedUploads(state: FormState) {
+    const urls = [
+      state.file ? state.uploadedUrl : null,
+      ...state.additionalAttachments.map((row) => (row.file ? row.url : null)),
+    ].filter((url): url is string => Boolean(url))
+
+    if (urls.length > 0) {
+      deleteUploadedResourceFiles(urls)
+    }
+  }
+
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
+      if (skipNextCloseCleanupRef.current) {
+        skipNextCloseCleanupRef.current = false
+      } else {
+        cleanupUnsavedUploads(form)
+      }
       setForm(formFromResource(resource))
       setErrors({})
       setSubmitError(null)
@@ -193,6 +214,9 @@ function EditResourceSheet({
     const generation = ++uploadGenerationRef.current
     uploadResourceFile(user.id, file).then((result) => {
       if (uploadGenerationRef.current !== generation) {
+        if (result.ok) {
+          deleteUploadedResourceFiles([result.url])
+        }
         return // file was replaced or removed while this upload was in flight
       }
       setForm((prev) =>
@@ -236,6 +260,9 @@ function EditResourceSheet({
 
   function handleRemoveFile() {
     uploadGenerationRef.current++
+    if (form.file && form.uploadedUrl) {
+      deleteUploadedResourceFiles([form.uploadedUrl])
+    }
     setForm((prev) => ({
       ...prev,
       file: null,
@@ -304,10 +331,6 @@ function EditResourceSheet({
       type: resource.type,
       whyUseful: form.whyUseful.trim(),
       links: [primaryLink, ...additionalLinks],
-      previewImageUrl:
-        form.attachmentMode === "link" && form.primaryUrl.trim() === resource.links[0]?.url
-          ? resource.previewImageUrl
-          : null,
     })
 
     setIsSubmitting(false)
@@ -317,20 +340,33 @@ function EditResourceSheet({
       return
     }
 
+    skipNextCloseCleanupRef.current = true
     handleOpenChange(false)
+    notifySupabaseUsageChanged()
     router.refresh()
   }
 
   return (
     <>
       <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetContent className="sm:max-w-[38rem]" side="right">
-          <SheetHeader>
+        <SheetContent
+          className={
+            isMobile ? "max-h-[92dvh] w-full rounded-t-3xl" : "sm:max-w-[38rem]"
+          }
+          side={isMobile ? "bottom" : "right"}
+        >
+          <SheetHeader className={isMobile ? "p-4 pb-3" : undefined}>
             <SheetTitle>Edit Resource</SheetTitle>
             <SheetDescription>Update the details for &quot;{resource.title}&quot;.</SheetDescription>
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div
+            className={
+              isMobile
+                ? "flex-1 overflow-y-auto px-4 pb-4"
+                : "flex-1 overflow-y-auto px-6 pb-6"
+            }
+          >
             <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
               <FieldGroup>
                 {submitError && (
@@ -387,7 +423,7 @@ function EditResourceSheet({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="lg"
                       className="shrink-0"
                       onClick={() => setFolderPickerOpen(true)}
                     >

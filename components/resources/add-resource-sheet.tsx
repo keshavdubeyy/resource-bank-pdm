@@ -16,6 +16,7 @@ import {
   type AttachmentValue,
 } from "@/components/resources/attachment-field"
 import { FolderPicker } from "@/components/resources/folder-picker"
+import { StoragePoolSummary } from "@/components/shared/storage-pool-summary"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -33,11 +34,18 @@ import {
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { createResourceAction } from "@/lib/resources/actions"
 import { getAllFolders } from "@/lib/resources/folder-actions"
 import { getFolderPathLabel } from "@/lib/resources/folder-tree"
+import { deleteUploadedResourceFiles } from "@/lib/resources/storage"
 import type { FolderRow, ResourceLink } from "@/lib/resources/types"
 import { normalizeUrl } from "@/lib/resources/utils"
+import {
+  createUsageMetric,
+  type SupabaseUsage,
+} from "@/lib/usage/usage-metrics"
+import { notifySupabaseUsageChanged } from "@/lib/usage/client-events"
 
 /** One screen, not a wizard: folder location, attachment, and an optional note
  * all sit together. Always controlled by the caller — this lets it be opened
@@ -55,6 +63,7 @@ function AddResourceSheet({
   initialFolderId?: string | null
 }) {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const isContextual = initialFolderId !== undefined
 
   const [folders, setFolders] = React.useState<FolderRow[]>([])
@@ -72,10 +81,25 @@ function AddResourceSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [submitError, setSubmitError] = React.useState<string | null>(null)
   const [submitted, setSubmitted] = React.useState(false)
+  const [usage, setUsage] = React.useState<SupabaseUsage | null>(null)
+  const [usageLoading, setUsageLoading] = React.useState(false)
 
   const hasPendingUpload =
     attachment.uploadStatus === "uploading" ||
     additionalAttachments.some((row) => row.uploadStatus === "uploading")
+  const locallyPickedUploadBytes =
+    (attachment.file?.size ?? 0) +
+    additionalAttachments.reduce((total, row) => total + (row.file?.size ?? 0), 0)
+  const remainingStorageBytes = usage?.available
+    ? Math.max(usage.storage.remainingBytes - locallyPickedUploadBytes, 0)
+    : null
+  const displayedStorageMetric = usage?.available
+    ? createUsageMetric(
+        "Storage",
+        usage.storage.usedBytes + locallyPickedUploadBytes,
+        usage.storage.limitBytes
+      )
+    : null
 
   React.useEffect(() => {
     if (open && !foldersLoaded) {
@@ -85,6 +109,42 @@ function AddResourceSheet({
       })
     }
   }, [open, foldersLoaded])
+
+  React.useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    let cancelled = false
+    const loadingTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        setUsageLoading(true)
+      }
+    }, 0)
+
+    fetch("/api/usage/supabase", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: SupabaseUsage | null) => {
+        if (!cancelled) {
+          setUsage(data)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsage(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setUsageLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(loadingTimer)
+    }
+  }, [open])
 
   function resetState() {
     setFolderId(initialFolderId ?? null)
@@ -96,10 +156,23 @@ function AddResourceSheet({
     setSubmitted(false)
   }
 
+  function cleanupUnsavedUploads() {
+    const urls = [
+      attachment.file ? attachment.uploadedUrl : null,
+      ...additionalAttachments.map((row) => (row.file ? row.url : null)),
+    ].filter((url): url is string => Boolean(url))
+
+    if (urls.length > 0) {
+      deleteUploadedResourceFiles(urls)
+    }
+  }
+
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
       if (submitted) {
         router.refresh()
+      } else {
+        cleanupUnsavedUploads()
       }
       resetState()
     }
@@ -163,7 +236,6 @@ function AddResourceSheet({
       type: attachment.detectedType,
       whyUseful: whyUseful.trim(),
       links: [primaryLink, ...additionalLinks],
-      previewImageUrl: attachment.mode === "link" ? attachment.previewImageUrl : null,
     })
 
     setIsSubmitting(false)
@@ -174,20 +246,32 @@ function AddResourceSheet({
     }
 
     setSubmitted(true)
+    notifySupabaseUsageChanged()
   }
 
   return (
     <>
       <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetContent className="sm:max-w-[38rem]" side="right">
-          <SheetHeader>
+        <SheetContent
+          className={
+            isMobile ? "max-h-[92dvh] w-full rounded-t-3xl" : "sm:max-w-[38rem]"
+          }
+          side={isMobile ? "bottom" : "right"}
+        >
+          <SheetHeader className={isMobile ? "p-4 pb-3" : undefined}>
             <SheetTitle>Add Resource</SheetTitle>
             <SheetDescription>
               Share a link or file — it appears in the hub right away.
             </SheetDescription>
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div
+            className={
+              isMobile
+                ? "flex-1 overflow-y-auto px-4 pb-4"
+                : "flex-1 overflow-y-auto px-6 pb-6"
+            }
+          >
             {submitted ? (
               <div className="flex flex-col items-center gap-4 py-8 text-center">
                 <HugeiconsIcon
@@ -223,22 +307,38 @@ function AddResourceSheet({
                   </div>
                 )}
 
-                <div className="flex items-start justify-between gap-2 rounded-2xl border border-dashed border-border px-3 py-2 text-sm">
-                  <span className="flex min-w-0 items-start gap-2">
+                {displayedStorageMetric ? (
+                  <StoragePoolSummary metric={displayedStorageMetric} />
+                ) : usageLoading ? (
+                  <div className="rounded-2xl border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                    Checking shared storage pool…
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                    Shared storage pool unavailable. Uploads are still limited to 5 MB per file.
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-dashed border-border px-3 py-3 text-sm sm:py-2">
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
                     <HugeiconsIcon
                       icon={Folder01Icon}
                       strokeWidth={2}
-                      className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                      className="size-4 shrink-0 text-muted-foreground"
                     />
-                    <span className="break-words">
-                      {isContextual ? "Adding to: " : "Where should this go? "}
-                      {getFolderPathLabel(folders, folderId)}
+                    <span className="min-w-0 leading-snug">
+                      <span className="block sm:inline">
+                        {isContextual ? "Adding to:" : "Where should this go?"}
+                      </span>{" "}
+                      <span className="block break-words sm:inline">
+                        {getFolderPathLabel(folders, folderId)}
+                      </span>
                     </span>
                   </span>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="lg"
                     className="shrink-0"
                     onClick={() => setFolderPickerOpen(true)}
                   >
@@ -251,6 +351,7 @@ function AddResourceSheet({
                   onChange={(patch) => setAttachment((prev) => ({ ...prev, ...patch }))}
                   userId={user.id}
                   error={attachmentError}
+                  remainingStorageBytes={remainingStorageBytes}
                 />
 
                 <Field>
@@ -269,6 +370,7 @@ function AddResourceSheet({
                   <AdditionalAttachmentsField
                     rows={additionalAttachments}
                     userId={user.id}
+                    remainingStorageBytes={remainingStorageBytes}
                     onChange={setAdditionalAttachments}
                   />
                 </Field>
@@ -283,29 +385,58 @@ function AddResourceSheet({
         </SheetContent>
       </Sheet>
 
-      <Dialog open={folderPickerOpen} onOpenChange={setFolderPickerOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Choose a folder</DialogTitle>
-          </DialogHeader>
-          {foldersLoaded ? (
-            <FolderPicker
-              folders={folders}
-              onFoldersChange={setFolders}
-              value={folderId}
-              onSelect={(id) => {
-                setFolderId(id)
-                setFolderPickerOpen(false)
-              }}
-            />
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner />
-              Loading folders…
+      {isMobile ? (
+        <Sheet open={folderPickerOpen} onOpenChange={setFolderPickerOpen}>
+          <SheetContent side="bottom" className="max-h-[85dvh] rounded-t-3xl">
+            <SheetHeader>
+              <SheetTitle>Choose a folder</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto px-6 pb-6">
+              {foldersLoaded ? (
+                <FolderPicker
+                  folders={folders}
+                  onFoldersChange={setFolders}
+                  value={folderId}
+                  onSelect={(id) => {
+                    setFolderId(id)
+                    setFolderPickerOpen(false)
+                  }}
+                  listClassName="max-h-[50vh]"
+                />
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner />
+                  Loading folders…
+                </div>
+              )}
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={folderPickerOpen} onOpenChange={setFolderPickerOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Choose a folder</DialogTitle>
+            </DialogHeader>
+            {foldersLoaded ? (
+              <FolderPicker
+                folders={folders}
+                onFoldersChange={setFolders}
+                value={folderId}
+                onSelect={(id) => {
+                  setFolderId(id)
+                  setFolderPickerOpen(false)
+                }}
+              />
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner />
+                Loading folders…
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   )
 }

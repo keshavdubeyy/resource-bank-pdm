@@ -17,9 +17,12 @@ import { cn } from "@/lib/utils"
 
 function FolderRow({
   name,
+  folderCount,
+  resourceCount,
   canCreateHere,
   canManage,
   onOpen,
+  onShare,
   onAddResource,
   onNewSubfolder,
   onRename,
@@ -32,11 +35,14 @@ function FolderRow({
   onDrop,
 }: {
   name: string
+  folderCount: number
+  resourceCount: number
   /** Any signed-in user can add resources/subfolders here, regardless of ownership. */
   canCreateHere: boolean
   /** Only the folder's creator can rename/move/delete it (or drag it elsewhere). */
   canManage: boolean
   onOpen: () => void
+  onShare: () => void
   onAddResource: () => void
   onNewSubfolder: () => void
   onRename: () => void
@@ -48,6 +54,8 @@ function FolderRow({
   onDragLeave: () => void
   onDrop: (event: React.DragEvent) => void
 }) {
+  const metadata = formatFolderMetadata(folderCount, resourceCount)
+
   return (
     <Card
       role="button"
@@ -65,49 +73,129 @@ function FolderRow({
         }
       }}
       className={cn(
-        "flex cursor-pointer flex-row items-center gap-2 border border-dashed border-border bg-muted/40 px-3 py-2.5 shadow-none transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30",
-        isDragOver && "border-solid border-ring bg-accent ring-2 ring-ring/40"
+        "flex min-h-32 cursor-pointer flex-col items-stretch gap-3 rounded-[min(var(--radius-4xl),24px)] p-4 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 sm:min-h-0 sm:flex-row sm:items-center sm:gap-2 sm:px-3 sm:py-2.5",
+        isDragOver && "bg-accent ring-2 ring-ring/40"
       )}
     >
-      <HugeiconsIcon
-        icon={Folder01Icon}
-        strokeWidth={2}
-        className="size-5 shrink-0 text-muted-foreground"
-      />
-      <span className="flex-1 truncate text-sm font-medium">{name}</span>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={(event: React.MouseEvent) => event.stopPropagation()}
-            />
-          }
-        >
-          <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
-          <span className="sr-only">Folder actions</span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-          <DropdownMenuItem onClick={onOpen}>Open</DropdownMenuItem>
-          <DropdownMenuItem onClick={onAddResource}>Add Resource</DropdownMenuItem>
-          {canCreateHere && (
-            <DropdownMenuItem onClick={onNewSubfolder}>New Subfolder</DropdownMenuItem>
-          )}
-          {canManage && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
-              <DropdownMenuItem onClick={onMove}>Move</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                Delete
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-start justify-between gap-2 sm:hidden">
+        <HugeiconsIcon
+          icon={Folder01Icon}
+          strokeWidth={2}
+          className="size-6 shrink-0 text-muted-foreground"
+        />
+        <FolderActions
+          canCreateHere={canCreateHere}
+          canManage={canManage}
+          onOpen={onOpen}
+          onShare={onShare}
+          onAddResource={onAddResource}
+          onNewSubfolder={onNewSubfolder}
+          onRename={onRename}
+          onMove={onMove}
+          onDelete={onDelete}
+          triggerClassName="-mt-2 -mr-2"
+        />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:hidden">
+        <span className="font-heading line-clamp-2 break-words text-base leading-snug font-medium">
+          {name}
+        </span>
+        <span className="text-xs text-muted-foreground">{metadata}</span>
+      </div>
+
+      <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
+        <HugeiconsIcon
+          icon={Folder01Icon}
+          strokeWidth={2}
+          className="size-5 shrink-0 text-muted-foreground"
+        />
+        <span className="flex-1 truncate text-sm font-medium">{name}</span>
+        <FolderActions
+          canCreateHere={canCreateHere}
+          canManage={canManage}
+          onOpen={onOpen}
+          onShare={onShare}
+          onAddResource={onAddResource}
+          onNewSubfolder={onNewSubfolder}
+          onRename={onRename}
+          onMove={onMove}
+          onDelete={onDelete}
+        />
+      </div>
     </Card>
+  )
+}
+
+function formatFolderMetadata(folderCount: number, resourceCount: number): string {
+  if (folderCount === 0 && resourceCount === 0) {
+    return "Empty"
+  }
+  const folderLabel = `${folderCount} folder${folderCount === 1 ? "" : "s"}`
+  const resourceLabel = `${resourceCount} resource${resourceCount === 1 ? "" : "s"}`
+  if (folderCount > 0 && resourceCount > 0) {
+    return `${folderLabel} · ${resourceLabel}`
+  }
+  return folderCount > 0 ? folderLabel : resourceLabel
+}
+
+function FolderActions({
+  canCreateHere,
+  canManage,
+  onOpen,
+  onShare,
+  onAddResource,
+  onNewSubfolder,
+  onRename,
+  onMove,
+  onDelete,
+  triggerClassName,
+}: {
+  canCreateHere: boolean
+  canManage: boolean
+  onOpen: () => void
+  onShare: () => void
+  onAddResource: () => void
+  onNewSubfolder: () => void
+  onRename: () => void
+  onMove: () => void
+  onDelete: () => void
+  triggerClassName?: string
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            className={triggerClassName}
+            onClick={(event: React.MouseEvent) => event.stopPropagation()}
+          />
+        }
+      >
+        <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
+        <span className="sr-only">Folder actions</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+        <DropdownMenuItem onClick={onOpen}>Open</DropdownMenuItem>
+        <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
+        <DropdownMenuItem onClick={onAddResource}>Add Resource</DropdownMenuItem>
+        {canCreateHere && (
+          <DropdownMenuItem onClick={onNewSubfolder}>New Subfolder</DropdownMenuItem>
+        )}
+        {canManage && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
+            <DropdownMenuItem onClick={onMove}>Move</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

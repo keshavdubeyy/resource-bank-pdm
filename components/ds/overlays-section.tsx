@@ -433,7 +433,7 @@ function OverlaysSection() {
       <DsExample title="Tooltip" description="A short hint shown on hover or focus.">
         <Tooltip>
           <TooltipTrigger
-            render={<Button variant="outline" size="icon" aria-label="Settings" />}
+            render={<Button variant="outline" size="icon-lg" aria-label="Settings" />}
           >
             <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} />
           </TooltipTrigger>

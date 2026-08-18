@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 
 export default function DesignSystemPage() {
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-4 sm:gap-8 sm:px-6 sm:py-12 lg:px-8">
       <PageHeader
         title="Design System"
         description="A living reference of every shadcn/ui component installed in this project, grouped by purpose."

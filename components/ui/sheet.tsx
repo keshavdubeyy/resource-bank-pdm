@@ -67,7 +67,7 @@ function SheetContent({
               <Button
                 variant="ghost"
                 className="absolute top-4 right-4 bg-secondary"
-                size="icon-sm"
+                size="icon-lg"
               />
             }
           >

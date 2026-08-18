@@ -23,7 +23,6 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -34,6 +33,7 @@ import { deleteResourceAction } from "@/lib/resources/actions"
 import { guessLinkIconKind } from "@/lib/resources/storage"
 import type { Resource } from "@/lib/resources/types"
 import { getFaviconUrl } from "@/lib/resources/utils"
+import { notifySupabaseUsageChanged } from "@/lib/usage/client-events"
 
 function MyResourceCard({
   resource,
@@ -49,7 +49,7 @@ function MyResourceCard({
   const [error, setError] = React.useState<string | null>(null)
   const primaryUrl = resource.links[0]?.url
   const iconKind = guessLinkIconKind(primaryUrl)
-  const avatarImageUrl = iconKind ? null : (resource.previewImageUrl ?? getFaviconUrl(primaryUrl))
+  const avatarImageUrl = iconKind ? null : getFaviconUrl(primaryUrl)
 
   async function handleDelete() {
     setIsDeleting(true)
@@ -63,6 +63,7 @@ function MyResourceCard({
     }
 
     setDeleteOpen(false)
+    notifySupabaseUsageChanged()
     router.refresh()
   }
 
@@ -80,12 +81,7 @@ function MyResourceCard({
               />
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col gap-1.5">
-            <CardTitle className="line-clamp-2">{resource.title}</CardTitle>
-            <CardDescription className="line-clamp-2">
-              {resource.description}
-            </CardDescription>
-          </div>
+          <CardTitle className="line-clamp-2">{resource.title}</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
@@ -101,7 +97,7 @@ function MyResourceCard({
         </span>
         <div className="flex gap-2">
           <Button
-            size="sm"
+            size="lg"
             variant="outline"
             className="flex-1"
             onClick={() => setEditOpen(true)}
@@ -110,7 +106,7 @@ function MyResourceCard({
           </Button>
 
           <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <AlertDialogTrigger render={<Button size="sm" variant="destructive" className="flex-1" />}>
+            <AlertDialogTrigger render={<Button size="lg" variant="destructive" className="flex-1" />}>
               Delete
             </AlertDialogTrigger>
             <AlertDialogContent>

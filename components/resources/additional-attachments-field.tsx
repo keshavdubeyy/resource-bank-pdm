@@ -26,7 +26,14 @@ import { FieldError } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
-import { getUploadKind, MAX_UPLOAD_BYTES, uploadResourceFile, type UploadStatus } from "@/lib/resources/storage"
+import {
+  deleteUploadedResourceFiles,
+  getUploadKind,
+  MAX_UPLOAD_BYTES,
+  uploadResourceFile,
+  type UploadStatus,
+} from "@/lib/resources/storage"
+import { formatBytes } from "@/lib/resources/utils"
 
 export type AdditionalAttachmentKind = "link" | "pdf" | "image"
 
@@ -65,11 +72,13 @@ function AdditionalAttachmentsField({
   rows,
   userId,
   errors,
+  remainingStorageBytes,
   onChange,
 }: {
   rows: AdditionalAttachmentRow[]
   userId: string
   errors?: Record<string, string>
+  remainingStorageBytes?: number | null
   onChange: (rows: AdditionalAttachmentRow[]) => void
 }) {
   const [expanded, setExpanded] = React.useState(rows.length > 0)
@@ -86,6 +95,10 @@ function AdditionalAttachmentsField({
   }
 
   const removeRow = (id: string) => {
+    const row = rows.find((candidate) => candidate.id === id)
+    if (row?.file && row.url) {
+      deleteUploadedResourceFiles([row.url])
+    }
     onChange(rows.filter((row) => row.id !== id))
   }
 
@@ -109,6 +122,9 @@ function AdditionalAttachmentsField({
     uploadResourceFile(userId, file).then((result) => {
       const current = rowsRef.current
       if (!current.some((row) => row.id === id)) {
+        if (result.ok) {
+          deleteUploadedResourceFiles([result.url])
+        }
         return // removed while the upload was in flight
       }
       onChange(
@@ -148,6 +164,10 @@ function AdditionalAttachmentsField({
       setFileError("Files must be 5 MB or smaller.")
       return
     }
+    if (remainingStorageBytes !== null && remainingStorageBytes !== undefined && selected.size > remainingStorageBytes) {
+      setFileError(`Only ${formatBytes(remainingStorageBytes)} is left in the shared storage pool.`)
+      return
+    }
     setFileError(null)
     const id = createRowId()
     onChange([
@@ -162,7 +182,7 @@ function AdditionalAttachmentsField({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
+        size="lg"
         onClick={() => setExpanded(true)}
         className="self-start text-muted-foreground"
       >
@@ -197,7 +217,7 @@ function AdditionalAttachmentsField({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-lg"
                   onClick={() => removeRow(row.id)}
                   aria-label="Remove attachment"
                 >
@@ -273,15 +293,15 @@ function AdditionalAttachmentsField({
       {fileError && <FieldError>{fileError}</FieldError>}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={addLinkRow}>
+        <Button type="button" variant="outline" size="lg" onClick={addLinkRow}>
           <HugeiconsIcon icon={Link04Icon} strokeWidth={2} data-icon="inline-start" />
           Link
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => promptForFile("pdf")}>
+        <Button type="button" variant="outline" size="lg" onClick={() => promptForFile("pdf")}>
           <HugeiconsIcon icon={Pdf01Icon} strokeWidth={2} data-icon="inline-start" />
           PDF
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => promptForFile("image")}>
+        <Button type="button" variant="outline" size="lg" onClick={() => promptForFile("image")}>
           <HugeiconsIcon icon={Image01Icon} strokeWidth={2} data-icon="inline-start" />
           Image
         </Button>

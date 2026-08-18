@@ -21,6 +21,7 @@ function DraggableResourceCard({
   resource,
   isOwner,
   onSelect,
+  onShare,
   onEdit,
   onMove,
   onDelete,
@@ -30,6 +31,7 @@ function DraggableResourceCard({
   resource: Resource
   isOwner: boolean
   onSelect: (resource: Resource) => void
+  onShare: () => void
   onEdit: () => void
   onMove: () => void
   onDelete: () => void
@@ -49,7 +51,7 @@ function DraggableResourceCard({
           render={
             <Button
               variant="ghost"
-              size="icon-xs"
+              size="icon-lg"
               className="absolute top-3 right-3 z-10 bg-background/80 backdrop-blur-sm"
               onClick={(event: React.MouseEvent) => event.stopPropagation()}
             />
@@ -60,6 +62,7 @@ function DraggableResourceCard({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => onSelect(resource)}>Open</DropdownMenuItem>
+          <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
           {isOwner && (
             <>
               <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>

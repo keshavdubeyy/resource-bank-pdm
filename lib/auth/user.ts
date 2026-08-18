@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/server"
 export interface AppUser {
   id: string
   name: string
+  email: string | null
   avatarUrl: string | null
 }
 
@@ -21,7 +22,7 @@ export function toAppUser(user: AuthUser): AppUser {
     (meta.picture as string | undefined) ||
     null
 
-  return { id: user.id, name, avatarUrl }
+  return { id: user.id, name, email: user.email ?? null, avatarUrl }
 }
 
 export async function getCurrentUser(): Promise<AppUser | null> {

@@ -76,7 +76,7 @@ function ActiveFilters({
       <Button
         type="button"
         variant="ghost"
-        size="xs"
+        size="lg"
         onClick={onClearAll}
         className="text-muted-foreground"
       >

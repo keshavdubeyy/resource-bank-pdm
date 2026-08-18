@@ -77,7 +77,7 @@ function FiltersPopover({
 
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+      <PopoverTrigger render={<Button variant="outline" size="lg" />}>
         <HugeiconsIcon
           icon={FilterHorizontalIcon}
           strokeWidth={2}
@@ -109,7 +109,7 @@ function FiltersPopover({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="lg"
               onClick={onReset}
               className="self-start"
             >

@@ -1,0 +1,43 @@
+"use client"
+
+import Link from "next/link"
+
+import { AccountUsageSummary } from "@/components/shared/account-usage-summary"
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import { signOutAction } from "@/lib/auth/actions"
+import type { AppUser } from "@/lib/auth/user"
+import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
+
+function AccountMenuContent({
+  user,
+  usage,
+}: {
+  user: AppUser
+  usage: SupabaseUsage | null
+}) {
+  return (
+    <>
+      <div className="px-2 py-1.5">
+        <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
+        {user.email && (
+          <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+        )}
+      </div>
+      <DropdownMenuSeparator />
+      <AccountUsageSummary usage={usage} />
+      <DropdownMenuSeparator />
+      <DropdownMenuItem render={<Link href="/my-resources" />}>
+        My Resources
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" onClick={() => signOutAction()}>
+        Sign out
+      </DropdownMenuItem>
+    </>
+  )
+}
+
+export { AccountMenuContent }

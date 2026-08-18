@@ -42,6 +42,13 @@ export function isValidUrl(value: string): boolean {
   }
 }
 
+/** Older resources were saved with description === title (a since-removed
+ * fallback), so an empty-check alone isn't enough to catch "no real note". */
+export function hasMeaningfulDescription(resource: { title: string; description: string }): boolean {
+  const description = resource.description.trim()
+  return description.length > 0 && description !== resource.title.trim()
+}
+
 export function truncate(value: string, maxLength: number): string {
   const trimmed = value.trim()
   if (trimmed.length <= maxLength) {
