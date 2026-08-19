@@ -282,7 +282,7 @@ function AddResourceSheet({
                 <div className="flex flex-col gap-1">
                   <p className="font-medium">Resource added</p>
                   <p className="text-sm text-muted-foreground">
-                    &quot;{attachment.title}&quot; is ready to browse.
+                    Thanks for contributing to the batch resource bank.
                   </p>
                 </div>
                 <div className="flex gap-2">

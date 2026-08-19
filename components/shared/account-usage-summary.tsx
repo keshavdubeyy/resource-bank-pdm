@@ -4,6 +4,7 @@ import * as React from "react"
 
 import type { SupabaseUsage, UsageMetric, UsageTone } from "@/lib/usage/usage-metrics"
 import { StoragePoolSummary } from "@/components/shared/storage-pool-summary"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SUPABASE_USAGE_CHANGED_EVENT } from "@/lib/usage/client-events"
 import { cn } from "@/lib/utils"
 
@@ -41,8 +42,12 @@ function UsageBar({ metric }: { metric: UsageMetric }) {
   )
 }
 
-function AccountUsageSummary({ usage: initialUsage }: { usage: SupabaseUsage | null }) {
-  const [usage, setUsage] = React.useState(initialUsage)
+/** Fetches its own usage data on mount instead of receiving it as a
+ * server-rendered prop — this component only mounts when the account menu is
+ * actually opened, so the Supabase usage RPC never runs on page navigation. */
+function AccountUsageSummary() {
+  const [usage, setUsage] = React.useState<SupabaseUsage | null>(null)
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     let cancelled = false
@@ -59,9 +64,14 @@ function AccountUsageSummary({ usage: initialUsage }: { usage: SupabaseUsage | n
         }
       } catch {
         // Keep the last known value visible.
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
 
+    refreshUsage()
     window.addEventListener(SUPABASE_USAGE_CHANGED_EVENT, refreshUsage)
     window.addEventListener("focus", refreshUsage)
 
@@ -73,7 +83,12 @@ function AccountUsageSummary({ usage: initialUsage }: { usage: SupabaseUsage | n
   }, [])
 
   if (!usage) {
-    return null
+    return loading ? (
+      <div className="space-y-2 px-2 py-1.5">
+        <Skeleton className="h-3 w-16 rounded-full" />
+        <Skeleton className="h-1.5 w-full rounded-full" />
+      </div>
+    ) : null
   }
 
   return (

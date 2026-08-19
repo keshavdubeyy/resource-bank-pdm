@@ -73,11 +73,11 @@ function FolderRow({
         }
       }}
       className={cn(
-        "flex min-h-32 cursor-pointer flex-col items-stretch gap-3 rounded-[min(var(--radius-4xl),24px)] p-4 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 sm:min-h-0 sm:flex-row sm:items-center sm:gap-2 sm:px-3 sm:py-2.5",
+        "flex min-h-32 cursor-pointer flex-col items-stretch gap-3 rounded-[min(var(--radius-4xl),24px)] p-4 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30",
         isDragOver && "bg-accent ring-2 ring-ring/40"
       )}
     >
-      <div className="flex items-start justify-between gap-2 sm:hidden">
+      <div className="flex items-start justify-between gap-2">
         <HugeiconsIcon
           icon={Folder01Icon}
           strokeWidth={2}
@@ -96,31 +96,11 @@ function FolderRow({
           triggerClassName="-mt-2 -mr-2"
         />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:hidden">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="font-heading line-clamp-2 break-words text-base leading-snug font-medium">
           {name}
         </span>
         <span className="text-xs text-muted-foreground">{metadata}</span>
-      </div>
-
-      <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
-        <HugeiconsIcon
-          icon={Folder01Icon}
-          strokeWidth={2}
-          className="size-5 shrink-0 text-muted-foreground"
-        />
-        <span className="flex-1 truncate text-sm font-medium">{name}</span>
-        <FolderActions
-          canCreateHere={canCreateHere}
-          canManage={canManage}
-          onOpen={onOpen}
-          onShare={onShare}
-          onAddResource={onAddResource}
-          onNewSubfolder={onNewSubfolder}
-          onRename={onRename}
-          onMove={onMove}
-          onDelete={onDelete}
-        />
       </div>
     </Card>
   )

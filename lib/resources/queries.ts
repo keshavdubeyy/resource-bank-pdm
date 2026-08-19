@@ -10,7 +10,7 @@ import type {
   ResourceType,
 } from "@/lib/resources/types"
 
-const RESOURCE_SELECT = "*, resource_links(id, label, url, position)"
+export const RESOURCE_SELECT = "*, resource_links(id, label, url, position)"
 
 interface DbResourceLink {
   id: string

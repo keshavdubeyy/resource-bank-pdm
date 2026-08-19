@@ -13,6 +13,7 @@ import {
 import { AddResourceSheet } from "@/components/resources/add-resource-sheet"
 import { AddResourceTrigger } from "@/components/resources/add-resource-trigger"
 import { AuthRequiredDialog } from "@/components/resources/auth-required-dialog"
+import { ContributionNudge } from "@/components/resources/contribution-nudge"
 import { DraggableResourceCard } from "@/components/resources/draggable-resource-card"
 import { EditResourceSheet } from "@/components/resources/edit-resource-sheet"
 import { FolderPicker } from "@/components/resources/folder-picker"
@@ -25,6 +26,13 @@ import {
   readAuthReturnIntent,
   type AuthActionIntent,
 } from "@/lib/auth/client"
+import { recordResourceOpened } from "@/hooks/use-contribution-nudge"
+import {
+  getFolderResourceCounts,
+  getFolderResources,
+  getResourceBySlug,
+  searchResourcesServer,
+} from "@/lib/resources/resource-actions"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,7 +80,6 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import type { AppUser } from "@/lib/auth/user"
 import { deleteResourceAction } from "@/lib/resources/actions"
 import { notifySupabaseUsageChanged } from "@/lib/usage/client-events"
-import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 import {
   createFolderAction,
   deleteFolderAction,
@@ -106,19 +113,6 @@ type AuthDialogState =
   | { intent: AuthActionIntent; folderId?: string | null; parentFolderId?: string | null }
   | null
 
-function searchResources(resources: Resource[], query: string): Resource[] {
-  const q = query.trim().toLowerCase()
-  if (!q) {
-    return []
-  }
-  return resources.filter((resource) => {
-    const haystack = [resource.title, resource.description, resource.contributor]
-      .join(" ")
-      .toLowerCase()
-    return haystack.includes(q)
-  })
-}
-
 function searchFolders(folders: FolderRowType[], query: string): FolderRowType[] {
   const q = query.trim().toLowerCase()
   if (!q) {
@@ -140,14 +134,21 @@ function formatSearchResultCount(folderCount: number, resourceCount: number): st
 
 function FolderExplorer({
   user,
-  usage,
   resources: initialResources,
+  hasMoreResources: initialHasMoreResources,
+  folderResourceCounts,
+  hasContributed,
   folders: initialFolders,
   currentFolderId,
 }: {
   user: AppUser | null
-  usage: SupabaseUsage | null
+  /** Just the current folder's first page — /browse fetches per-folder now, not the whole table. */
   resources: Resource[]
+  hasMoreResources: boolean
+  /** Resource counts for the direct subfolders visible in this view (HEAD-count queries, not full rows). */
+  folderResourceCounts: Record<string, number>
+  /** Server-computed via a cheap existence check — no longer derived from a fully-loaded resources array. */
+  hasContributed: boolean
   folders: FolderRowType[]
   /** Sourced from the URL (/browse or /browse/[folderId]) so refresh, back/forward,
    * and sharing a folder link all work — not owned as local component state. */
@@ -155,10 +156,27 @@ function FolderExplorer({
 }) {
   const router = useRouter()
   const [resources, setResources] = React.useState(initialResources)
+  const [hasMoreResources, setHasMoreResources] = React.useState(initialHasMoreResources)
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false)
+  const [folderCounts, setFolderCounts] = React.useState(folderResourceCounts)
   const [folders, setFolders] = React.useState(initialFolders)
 
   function navigateToFolder(folderId: string | null) {
     router.push(folderId ? `/browse/${folderId}` : "/browse")
+  }
+
+  async function loadMoreResources() {
+    if (isLoadingMore || !hasMoreResources) {
+      return
+    }
+    setIsLoadingMore(true)
+    try {
+      const page = await getFolderResources(currentFolderId, { offset: resources.length })
+      setResources((prev) => [...prev, ...page.resources])
+      setHasMoreResources(page.hasMore)
+    } finally {
+      setIsLoadingMore(false)
+    }
   }
 
   // Resync local state when fresh props arrive (e.g. after router.refresh()),
@@ -167,6 +185,12 @@ function FolderExplorer({
   if (initialResources !== prevInitialResources) {
     setPrevInitialResources(initialResources)
     setResources(initialResources)
+    setHasMoreResources(initialHasMoreResources)
+  }
+  const [prevFolderResourceCounts, setPrevFolderResourceCounts] = React.useState(folderResourceCounts)
+  if (folderResourceCounts !== prevFolderResourceCounts) {
+    setPrevFolderResourceCounts(folderResourceCounts)
+    setFolderCounts(folderResourceCounts)
   }
   const [prevInitialFolders, setPrevInitialFolders] = React.useState(initialFolders)
   if (initialFolders !== prevInitialFolders) {
@@ -175,16 +199,12 @@ function FolderExplorer({
   }
 
   const [searchQuery, setSearchQuery] = React.useState("")
-  // A shared resource link (?resource=<slug>) opens straight into that
-  // resource's detail sheet — derived once at mount, not via an effect.
-  const [selectedResource, setSelectedResource] = React.useState<Resource | null>(() => {
-    if (typeof window === "undefined") {
-      return null
-    }
-    const slug = new URLSearchParams(window.location.search).get("resource")
-    return slug ? (resources.find((resource) => resource.slug === slug) ?? null) : null
-  })
-  const [detailOpen, setDetailOpen] = React.useState(selectedResource !== null)
+  const [searchResults, setSearchResults] = React.useState<Resource[]>([])
+  const [searchFolderCounts, setSearchFolderCounts] = React.useState<Record<string, number>>({})
+  const [isSearchLoading, setIsSearchLoading] = React.useState(false)
+  const searchGenerationRef = React.useRef(0)
+  const [selectedResource, setSelectedResource] = React.useState<Resource | null>(null)
+  const [detailOpen, setDetailOpen] = React.useState(false)
   const [editingResource, setEditingResource] = React.useState<Resource | null>(null)
   const [editOpen, setEditOpen] = React.useState(false)
 
@@ -236,14 +256,25 @@ function FolderExplorer({
     router.replace(clearAuthReturnIntent(), { scroll: false })
   }, [router, user])
 
-  // Strips the one-time `?resource=<slug>` share param back out of the URL
-  // once it's been consumed by the lazy state initializer above — a plain
-  // sync with the browser's URL, so no setState belongs in this effect.
+  // A shared resource link (?resource=<slug>) opens straight into that
+  // resource's detail sheet — fetched directly since it may live in a
+  // different folder than whichever page this link landed on, so it won't
+  // necessarily be in the current folder's loaded page. Also strips the
+  // one-time param back out of the URL once consumed.
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (!params.has("resource")) {
+    const slug = params.get("resource")
+    if (!slug) {
       return
     }
+
+    getResourceBySlug(slug).then((resource) => {
+      if (resource) {
+        setSelectedResource(resource)
+        setDetailOpen(true)
+      }
+    })
+
     params.delete("resource")
     const query = params.toString()
     router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`, { scroll: false })
@@ -252,23 +283,54 @@ function FolderExplorer({
   }, [])
 
   const isSearching = searchQuery.trim().length > 0
-  const searchResultsList = React.useMemo(
-    () => searchResources(resources, searchQuery),
-    [resources, searchQuery]
-  )
   const searchFoldersList = React.useMemo(
     () => searchFolders(folders, searchQuery),
     [folders, searchQuery]
   )
 
+  // Clears stale results the moment the query empties out — adjusted during
+  // render (like the resync blocks above) rather than in the effect below,
+  // since it's syncing to `searchQuery` itself, not subscribing to anything.
+  const [prevSearchQuery, setPrevSearchQuery] = React.useState(searchQuery)
+  if (searchQuery !== prevSearchQuery) {
+    setPrevSearchQuery(searchQuery)
+    if (!searchQuery.trim()) {
+      setSearchResults([])
+      setSearchFolderCounts({})
+      setIsSearchLoading(false)
+    } else {
+      setIsSearchLoading(true)
+    }
+  }
+
+  // Resources are no longer fully loaded client-side, so search runs against
+  // the server instead of filtering in memory — debounced, with a generation
+  // guard so a slower in-flight request can't clobber a newer one's results.
+  React.useEffect(() => {
+    const trimmed = searchQuery.trim()
+    if (!trimmed) {
+      return
+    }
+
+    const generation = ++searchGenerationRef.current
+    const timeout = window.setTimeout(async () => {
+      const matchedFolders = searchFolders(folders, trimmed)
+      const [resourceResults, counts] = await Promise.all([
+        searchResourcesServer(trimmed),
+        getFolderResourceCounts(matchedFolders.map((folder) => folder.id)),
+      ])
+      if (searchGenerationRef.current !== generation) {
+        return
+      }
+      setSearchResults(resourceResults)
+      setSearchFolderCounts(counts)
+      setIsSearchLoading(false)
+    }, 300)
+
+    return () => window.clearTimeout(timeout)
+  }, [searchQuery, folders])
+
   const childrenMap = React.useMemo(() => buildChildrenMap(folders), [folders])
-  const resourceCountsByFolder = React.useMemo(() => {
-    const counts = new Map<string | null, number>()
-    resources.forEach((resource) => {
-      counts.set(resource.folderId, (counts.get(resource.folderId) ?? 0) + 1)
-    })
-    return counts
-  }, [resources])
   const breadcrumbPath = React.useMemo(
     () => getBreadcrumbPath(folders, currentFolderId),
     [folders, currentFolderId]
@@ -276,15 +338,14 @@ function FolderExplorer({
   const currentFolder = breadcrumbPath.at(-1) ?? null
   const canManageCurrentFolder = !!user && currentFolder?.createdBy === user.id
   const currentSubfolders = childrenMap.get(currentFolderId) ?? []
-  const currentResources = React.useMemo(
-    () => resources.filter((resource) => resource.folderId === currentFolderId),
-    [resources, currentFolderId]
-  )
+  // `resources` is already scoped to currentFolderId by the server fetch — no client-side filter needed.
+  const currentResources = resources
   // Being at the root view isn't "inside a folder" — Add Resource should still
   // ask where to put it there, same as from the header or search.
   const addResourceFolderId = currentFolderId === null ? undefined : currentFolderId
 
   function handleSelectResource(resource: Resource) {
+    recordResourceOpened()
     setSelectedResource(resource)
     setDetailOpen(true)
   }
@@ -393,11 +454,15 @@ function FolderExplorer({
         setActionError(result.error)
         return
       }
-      setResources((prev) =>
-        prev.map((resource) =>
-          resource.id === item.id ? { ...resource, folderId: targetFolderId } : resource
-        )
-      )
+      // `resources` only holds the current folder's items now, and a valid
+      // drop always targets a different folder — so the item leaves this view.
+      setResources((prev) => prev.filter((resource) => resource.id !== item.id))
+      if (targetFolderId && targetFolderId in folderCounts) {
+        setFolderCounts((prev) => ({
+          ...prev,
+          [targetFolderId]: (prev[targetFolderId] ?? 0) + 1,
+        }))
+      }
     }
   }
 
@@ -434,7 +499,6 @@ function FolderExplorer({
         onRename={() => currentFolder && setActionDialog({ type: "renameFolder", folder: currentFolder })}
         onDelete={() => currentFolder && setActionDialog({ type: "deleteFolder", folder: currentFolder })}
         user={user}
-        usage={usage}
       />
 
       {!isSearching && (
@@ -552,15 +616,16 @@ function FolderExplorer({
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">
-              {formatSearchResultCount(searchFoldersList.length, searchResultsList.length)} for &quot;
-              {searchQuery.trim()}&quot;
+              {isSearchLoading
+                ? "Searching…"
+                : `${formatSearchResultCount(searchFoldersList.length, searchResults.length)} for "${searchQuery.trim()}"`}
             </p>
             <Button variant="ghost" size="lg" onClick={() => setSearchQuery("")}>
               Clear search
             </Button>
           </div>
 
-          {searchFoldersList.length === 0 && searchResultsList.length === 0 ? (
+          {!isSearchLoading && searchFoldersList.length === 0 && searchResults.length === 0 ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -583,7 +648,7 @@ function FolderExplorer({
                         <FolderRow
                           name={folder.name}
                           folderCount={childrenMap.get(folder.id)?.length ?? 0}
-                          resourceCount={resourceCountsByFolder.get(folder.id) ?? 0}
+                          resourceCount={searchFolderCounts[folder.id] ?? 0}
                           canCreateHere
                           canManage={!!user && folder.createdBy === user.id}
                           onOpen={() => {
@@ -622,14 +687,17 @@ function FolderExplorer({
                 </div>
               )}
 
-              {searchResultsList.length > 0 && (
+              {searchResults.length > 0 && (
                 <div className="flex flex-col gap-3">
                   {searchFoldersList.length > 0 && (
                     <h2 className="text-sm font-medium text-muted-foreground">Resources</h2>
                   )}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {searchResultsList.map((resource) => (
-                      <div key={resource.id} className="flex flex-col gap-1.5">
+                    {searchResults.map((resource) => (
+                      <div
+                        key={resource.id}
+                        className="flex flex-col gap-1.5 animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
+                      >
                         <DraggableResourceCard
                           resource={resource}
                           isOwner={!!user && resource.createdBy === user.id}
@@ -673,7 +741,7 @@ function FolderExplorer({
                 </EmptyMedia>
                 <EmptyTitle>Nothing here yet</EmptyTitle>
                 <EmptyDescription>
-                  Create a folder or add a resource to get started.
+                  Be the first to add something useful to this folder.
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -697,7 +765,7 @@ function FolderExplorer({
                         key={folder.id}
                         name={folder.name}
                         folderCount={childrenMap.get(folder.id)?.length ?? 0}
-                        resourceCount={resourceCountsByFolder.get(folder.id) ?? 0}
+                        resourceCount={folderCounts[folder.id] ?? 0}
                         canCreateHere
                         canManage={!!user && folder.createdBy === user.id}
                         onOpen={() => navigateToFolder(folder.id)}
@@ -727,26 +795,49 @@ function FolderExplorer({
                   <h2 className="text-sm font-medium text-muted-foreground">Resources</h2>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {currentResources.map((resource) => (
-                      <DraggableResourceCard
+                      <div
                         key={resource.id}
-                        resource={resource}
-                        isOwner={!!user && resource.createdBy === user.id}
-                        onSelect={handleSelectResource}
-                        onShare={() => handleShareResource(resource)}
-                        onEdit={() => handleEditResource(resource)}
-                        onMove={() => setActionDialog({ type: "moveResource", resource })}
-                        onDelete={() => setActionDialog({ type: "deleteResource", resource })}
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = "move"
-                          event.dataTransfer.setData("text/plain", resource.id)
-                          setDraggedItem({ type: "resource", id: resource.id })
-                        }}
-                        onDragEnd={() => setDraggedItem(null)}
-                      />
+                        className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
+                      >
+                        <DraggableResourceCard
+                          resource={resource}
+                          isOwner={!!user && resource.createdBy === user.id}
+                          onSelect={handleSelectResource}
+                          onShare={() => handleShareResource(resource)}
+                          onEdit={() => handleEditResource(resource)}
+                          onMove={() => setActionDialog({ type: "moveResource", resource })}
+                          onDelete={() => setActionDialog({ type: "deleteResource", resource })}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = "move"
+                            event.dataTransfer.setData("text/plain", resource.id)
+                            setDraggedItem({ type: "resource", id: resource.id })
+                          }}
+                          onDragEnd={() => setDraggedItem(null)}
+                        />
+                      </div>
                     ))}
                   </div>
+                  {hasMoreResources && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="self-center"
+                      onClick={loadMoreResources}
+                      disabled={isLoadingMore}
+                    >
+                      {isLoadingMore && <Spinner data-icon="inline-start" />}
+                      {isLoadingMore ? "Loading…" : "Load more"}
+                    </Button>
+                  )}
                 </div>
               )}
+
+              <ContributionNudge
+                user={user}
+                hasContributed={hasContributed}
+                folderId={addResourceFolderId}
+              />
             </div>
           )}
         </>

@@ -9,15 +9,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { signOutAction } from "@/lib/auth/actions"
 import type { AppUser } from "@/lib/auth/user"
-import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 
-function AccountMenuContent({
-  user,
-  usage,
-}: {
-  user: AppUser
-  usage: SupabaseUsage | null
-}) {
+function AccountMenuContent({ user }: { user: AppUser }) {
   return (
     <>
       <div className="px-2 py-1.5">
@@ -27,7 +20,7 @@ function AccountMenuContent({
         )}
       </div>
       <DropdownMenuSeparator />
-      <AccountUsageSummary usage={usage} />
+      <AccountUsageSummary />
       <DropdownMenuSeparator />
       <DropdownMenuItem render={<Link href="/my-resources" />}>
         My Resources

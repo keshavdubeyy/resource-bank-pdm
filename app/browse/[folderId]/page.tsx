@@ -4,8 +4,12 @@ import { FolderExplorer } from "@/components/resources/folder-explorer"
 import { DatabaseErrorFallback } from "@/components/shared/database-error-fallback"
 import { getCurrentUser } from "@/lib/auth/user"
 import { getAllFolders } from "@/lib/resources/folder-actions"
-import { getPublicResources } from "@/lib/resources/queries"
-import { getSupabaseUsage } from "@/lib/usage/supabase-usage"
+import { buildChildrenMap } from "@/lib/resources/folder-tree"
+import {
+  getFolderResourceCounts,
+  getFolderResources,
+  hasUserContributed,
+} from "@/lib/resources/resource-actions"
 
 export default async function BrowseFolderPage({
   params,
@@ -16,20 +20,25 @@ export default async function BrowseFolderPage({
   let result:
     | {
         user: Awaited<ReturnType<typeof getCurrentUser>>
-        usage: Awaited<ReturnType<typeof getSupabaseUsage>>
-        resources: Awaited<ReturnType<typeof getPublicResources>>
+        hasContributed: boolean
+        resourcePage: Awaited<ReturnType<typeof getFolderResources>>
+        folderResourceCounts: Awaited<ReturnType<typeof getFolderResourceCounts>>
         folders: Awaited<ReturnType<typeof getAllFolders>>
       }
     | { error: Error }
 
   try {
-    const [user, resources, folders] = await Promise.all([
+    const [user, folders] = await Promise.all([
       getCurrentUser().catch(() => null),
-      getPublicResources(),
       getAllFolders(),
     ])
-    const usage = user ? await getSupabaseUsage() : null
-    result = { user, usage, resources, folders }
+    const subfolderIds = (buildChildrenMap(folders).get(folderId) ?? []).map((folder) => folder.id)
+    const [resourcePage, folderResourceCounts, hasContributed] = await Promise.all([
+      getFolderResources(folderId),
+      getFolderResourceCounts(subfolderIds),
+      user ? hasUserContributed(user.id) : Promise.resolve(false),
+    ])
+    result = { user, hasContributed, resourcePage, folderResourceCounts, folders }
   } catch (error) {
     result = { error: error as Error }
   }
@@ -47,8 +56,10 @@ export default async function BrowseFolderPage({
       ) : (
         <FolderExplorer
           user={result.user}
-          usage={result.usage}
-          resources={result.resources}
+          resources={result.resourcePage.resources}
+          hasMoreResources={result.resourcePage.hasMore}
+          folderResourceCounts={result.folderResourceCounts}
+          hasContributed={result.hasContributed}
           folders={result.folders}
           currentFolderId={folderId}
         />

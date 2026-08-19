@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { AppUser } from "@/lib/auth/user"
-import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 
 function initials(name: string): string {
   return (
@@ -25,13 +24,7 @@ function initials(name: string): string {
 
 /** Mobile counterpart to AuthNav — just the account menu. Adding a resource
  * happens via the floating action button instead of a top-nav button. */
-function MobileAccountMenu({
-  user,
-  usage,
-}: {
-  user: AppUser | null
-  usage: SupabaseUsage | null
-}) {
+function MobileAccountMenu({ user }: { user: AppUser | null }) {
   if (!user) {
     return null
   }
@@ -54,7 +47,7 @@ function MobileAccountMenu({
           <span className="sr-only">Open account menu</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-2rem)]">
-          <AccountMenuContent user={user} usage={usage} />
+          <AccountMenuContent user={user} />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

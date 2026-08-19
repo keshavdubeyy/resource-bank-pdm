@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { AppUser } from "@/lib/auth/user"
-import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 
 function initials(name: string): string {
   return (
@@ -23,13 +22,7 @@ function initials(name: string): string {
   )
 }
 
-function AuthNav({
-  user,
-  usage,
-}: {
-  user: AppUser | null
-  usage: SupabaseUsage | null
-}) {
+function AuthNav({ user }: { user: AppUser | null }) {
   return (
     <div className="flex items-center gap-2">
       {user && (
@@ -49,7 +42,7 @@ function AuthNav({
             <span className="sr-only">Open account menu</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-72">
-            <AccountMenuContent user={user} usage={usage} />
+            <AccountMenuContent user={user} />
           </DropdownMenuContent>
         </DropdownMenu>
       )}

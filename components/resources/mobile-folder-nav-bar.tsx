@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { AppUser } from "@/lib/auth/user"
 import type { FolderRow as FolderRowType } from "@/lib/resources/types"
-import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 
 /** iOS-style nav bar for the mobile browse flow: centered title, a back
  * chevron once nested in a folder, and a trailing slot that's the account
@@ -30,7 +29,6 @@ function MobileFolderNavBar({
   onRename,
   onDelete,
   user,
-  usage,
 }: {
   currentFolder: FolderRowType | null
   canManage: boolean
@@ -39,7 +37,6 @@ function MobileFolderNavBar({
   onRename: () => void
   onDelete: () => void
   user: AppUser | null
-  usage: SupabaseUsage | null
 }) {
   return (
     <div className="sticky top-0 z-40 -mx-4 -mt-4 flex h-14 items-center gap-1 border-b border-border bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/60 sm:-mx-6 sm:-mt-12 sm:px-6 md:hidden">
@@ -107,7 +104,7 @@ function MobileFolderNavBar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : user ? (
-        <MobileAccountMenu user={user} usage={usage} />
+        <MobileAccountMenu user={user} />
       ) : (
         <div className="size-9 shrink-0" />
       )}

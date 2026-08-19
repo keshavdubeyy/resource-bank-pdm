@@ -7,20 +7,13 @@ import { usePathname } from "next/navigation"
 import { AuthNav } from "@/components/shared/auth-nav"
 import { MobileAccountMenu } from "@/components/shared/mobile-account-menu"
 import type { AppUser } from "@/lib/auth/user"
-import type { SupabaseUsage } from "@/lib/usage/usage-metrics"
 import { cn } from "@/lib/utils"
 
 /** The browse/folder flow renders its own iOS-style nav bar (title, back
  * button, folder actions) on mobile — this collapses the default title row
  * out of its way there without touching desktop, which keeps the brand link
  * and account menu regardless of route. */
-function SiteHeaderBar({
-  user,
-  usage,
-}: {
-  user: AppUser | null
-  usage: SupabaseUsage | null
-}) {
+function SiteHeaderBar({ user }: { user: AppUser | null }) {
   const pathname = usePathname()
   const isBrowseRoute = pathname === "/browse" || pathname?.startsWith("/browse/")
 
@@ -66,10 +59,10 @@ function SiteHeaderBar({
         </Link>
 
         <div className="hidden md:block">
-          <AuthNav user={user} usage={usage} />
+          <AuthNav user={user} />
         </div>
 
-        {!isBrowseRoute && <MobileAccountMenu user={user} usage={usage} />}
+        {!isBrowseRoute && <MobileAccountMenu user={user} />}
       </div>
     </header>
   )
