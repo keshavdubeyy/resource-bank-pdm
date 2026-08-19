@@ -97,7 +97,8 @@ function FolderRow({
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="font-heading line-clamp-2 break-words text-base leading-snug font-medium">
+        {/* User-submitted content — force the app font, not font-heading. */}
+        <span className="line-clamp-2 break-words font-sans text-base leading-snug font-medium">
           {name}
         </span>
         <span className="text-xs text-muted-foreground">{metadata}</span>

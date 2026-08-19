@@ -4,7 +4,6 @@ import { format } from "date-fns"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Image01Icon, Link04Icon, PencilEdit02Icon, Pdf01Icon, UserIcon } from "@hugeicons/core-free-icons"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -24,6 +23,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { ResourceFavicon } from "@/components/resources/resource-favicon"
 import { guessLinkIconKind } from "@/lib/resources/storage"
 import { CATEGORY_LABELS, type Resource } from "@/lib/resources/types"
 import { getFaviconUrl, hasMeaningfulDescription } from "@/lib/resources/utils"
@@ -55,7 +55,7 @@ function ResourceDetailBody({ resource }: { resource: Resource }) {
                     strokeWidth={2}
                     data-icon="inline-start"
                   />
-                  {link.label}
+                  <span className="font-sans">{link.label}</span>
                 </Button>
               )
             })}
@@ -84,27 +84,6 @@ function ResourceDetailBody({ resource }: { resource: Resource }) {
         </span>
       </div>
     </div>
-  )
-}
-
-function ResourceDetailIcon({
-  avatarImageUrl,
-  iconKind,
-}: {
-  avatarImageUrl: string | null
-  iconKind: "pdf" | "image" | null
-}) {
-  return (
-    <Avatar size="sm" className="rounded-md">
-      {avatarImageUrl && <AvatarImage src={avatarImageUrl} alt="" />}
-      <AvatarFallback className="rounded-md">
-        <HugeiconsIcon
-          icon={iconKind === "image" ? Image01Icon : iconKind === "pdf" ? Pdf01Icon : Link04Icon}
-          strokeWidth={2}
-          className="size-3.5"
-        />
-      </AvatarFallback>
-    </Avatar>
   )
 }
 
@@ -154,12 +133,13 @@ function ResourceDetail({
         <DrawerContent className="max-h-[85dvh]">
           <DrawerHeader className="flex flex-col gap-2">
             <div className="flex items-start justify-between gap-2">
-              <ResourceDetailIcon avatarImageUrl={avatarImageUrl} iconKind={iconKind} />
+              <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} className="rounded-md" />
               <ResourceDetailHeaderActions onEdit={onEdit} />
             </div>
-            <DrawerTitle>{resource.title}</DrawerTitle>
+            {/* User-submitted content — force the app font, not Drawer*'s font-heading. */}
+            <DrawerTitle className="font-sans">{resource.title}</DrawerTitle>
             {hasMeaningfulDescription(resource) && (
-              <DrawerDescription>{resource.description}</DrawerDescription>
+              <DrawerDescription className="font-sans">{resource.description}</DrawerDescription>
             )}
           </DrawerHeader>
           <ScrollArea className="flex-1">
@@ -175,12 +155,13 @@ function ResourceDetail({
       <SheetContent side="right" className="sm:max-w-[38rem]">
         <SheetHeader className="flex flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
-            <ResourceDetailIcon avatarImageUrl={avatarImageUrl} iconKind={iconKind} />
+            <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} className="rounded-md" />
             <ResourceDetailHeaderActions onEdit={onEdit} />
           </div>
-          <SheetTitle>{resource.title}</SheetTitle>
+          {/* User-submitted content — force the app font, not Sheet*'s font-heading. */}
+          <SheetTitle className="font-sans">{resource.title}</SheetTitle>
           {hasMeaningfulDescription(resource) && (
-            <SheetDescription>{resource.description}</SheetDescription>
+            <SheetDescription className="font-sans">{resource.description}</SheetDescription>
           )}
         </SheetHeader>
         <ScrollArea className="flex-1">

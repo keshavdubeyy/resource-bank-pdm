@@ -343,7 +343,9 @@ function EditResourceSheet({
     skipNextCloseCleanupRef.current = true
     handleOpenChange(false)
     notifySupabaseUsageChanged()
-    router.refresh()
+    // startTransition keeps the current view visible while fresh data loads,
+    // instead of flashing the route's loading.tsx skeleton.
+    React.startTransition(() => router.refresh())
   }
 
   return (

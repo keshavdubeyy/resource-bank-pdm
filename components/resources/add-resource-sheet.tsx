@@ -170,7 +170,9 @@ function AddResourceSheet({
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
       if (submitted) {
-        router.refresh()
+        // startTransition keeps the current folder view visible while fresh
+        // data loads, instead of flashing the route's loading.tsx skeleton.
+        React.startTransition(() => router.refresh())
       } else {
         cleanupUnsavedUploads()
       }

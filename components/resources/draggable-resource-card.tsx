@@ -40,7 +40,7 @@ function DraggableResourceCard({
 }) {
   return (
     <div
-      className="relative"
+      className="relative h-full"
       draggable={isOwner}
       onDragStart={isOwner ? onDragStart : undefined}
       onDragEnd={onDragEnd}

@@ -127,3 +127,17 @@
     @apply font-sans;
     }
 }
+
+/* Respects the OS-level "reduce motion" setting across every transition and
+   animation in the app — including third-party ones (base-ui, tw-animate-css)
+   — rather than needing every component to opt out individually. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

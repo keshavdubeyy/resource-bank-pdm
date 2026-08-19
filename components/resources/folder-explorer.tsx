@@ -797,7 +797,7 @@ function FolderExplorer({
                     {currentResources.map((resource) => (
                       <div
                         key={resource.id}
-                        className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
+                        className="h-full animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
                       >
                         <DraggableResourceCard
                           resource={resource}
