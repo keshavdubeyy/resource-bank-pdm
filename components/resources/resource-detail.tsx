@@ -133,7 +133,7 @@ function ResourceDetail({
         <DrawerContent className="max-h-[85dvh]">
           <DrawerHeader className="flex flex-col gap-2">
             <div className="flex items-start justify-between gap-2">
-              <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} className="rounded-md" />
+              <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} />
               <ResourceDetailHeaderActions onEdit={onEdit} />
             </div>
             {/* User-submitted content — force the app font, not Drawer*'s font-heading. */}
@@ -155,7 +155,7 @@ function ResourceDetail({
       <SheetContent side="right" className="sm:max-w-[38rem]">
         <SheetHeader className="flex flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
-            <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} className="rounded-md" />
+            <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} />
             <ResourceDetailHeaderActions onEdit={onEdit} />
           </div>
           {/* User-submitted content — force the app font, not Sheet*'s font-heading. */}

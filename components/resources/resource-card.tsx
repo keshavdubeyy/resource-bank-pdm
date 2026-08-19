@@ -43,7 +43,7 @@ function ResourceCard({
     >
       <CardHeader>
         <div className="flex flex-col gap-2">
-          <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} className="rounded-md" />
+          <ResourceFavicon avatarImageUrl={avatarImageUrl} iconKind={iconKind} />
           {/* User-submitted content — force the app font, not CardTitle's font-heading. */}
           <CardTitle className="line-clamp-2 font-sans">{resource.title}</CardTitle>
         </div>
