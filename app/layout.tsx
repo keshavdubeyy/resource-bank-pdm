@@ -1,10 +1,12 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/toast"
+import { AnalyticsTracker } from "@/components/shared/analytics-tracker"
 import { SiteHeader } from "@/components/shared/site-header"
 import { SiteFooter } from "@/components/shared/site-footer"
 import { cn } from "@/lib/utils"
@@ -31,13 +33,21 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", geist.variable)}
+      className={cn(
+        "antialiased",
+        fontMono.variable,
+        "font-sans",
+        geist.variable
+      )}
     >
       <body>
         <ThemeProvider>
           <TooltipProvider>
             <Toaster>
               <div className="relative flex min-h-svh flex-col">
+                <Suspense fallback={null}>
+                  <AnalyticsTracker />
+                </Suspense>
                 <SiteHeader />
                 <main className="flex-1">{children}</main>
                 <SiteFooter />

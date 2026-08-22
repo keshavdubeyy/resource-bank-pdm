@@ -4,6 +4,7 @@ import * as React from "react"
 import { createBrowserClient } from "@supabase/ssr"
 
 import { Spinner } from "@/components/ui/spinner"
+import { trackAnalyticsEvent } from "@/components/shared/analytics-tracker"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
@@ -59,6 +60,7 @@ function AuthClientCallback({
       }
 
       setStatus("Taking you back...")
+      await trackAnalyticsEvent("login", safeNextPath(next))
       window.location.replace(safeNextPath(next))
     }
 
@@ -74,7 +76,9 @@ function AuthClientCallback({
       <Spinner />
       <div className="flex flex-col gap-1">
         <h1 className="text-base font-medium">{status}</h1>
-        <p className="text-sm text-muted-foreground">This only takes a moment.</p>
+        <p className="text-sm text-muted-foreground">
+          This only takes a moment.
+        </p>
       </div>
     </div>
   )
