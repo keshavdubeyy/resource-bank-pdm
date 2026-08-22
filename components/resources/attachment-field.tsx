@@ -26,6 +26,7 @@ import {
   deleteUploadedResourceFiles,
   getUploadKind,
   uploadResourceFile,
+  type UploadKind,
   type UploadStatus,
 } from "@/lib/resources/storage"
 import {
@@ -60,9 +61,18 @@ export const EMPTY_ATTACHMENT: AttachmentValue = {
   uploadError: null,
 }
 
+const RESOURCE_TYPE_BY_UPLOAD_KIND: Record<UploadKind, ResourceType> = {
+  pdf: "PDF",
+  image: "Image",
+  xls: "Spreadsheet",
+  csv: "Spreadsheet",
+  doc: "Document",
+  txt: "Document",
+}
+
 function detectFromFile(file: File): { type: ResourceType; title: string } {
-  const kind = getUploadKind(file)
-  return { type: kind === "image" ? "Image" : "PDF", title: file.name }
+  const kind = getUploadKind(file) ?? "pdf"
+  return { type: RESOURCE_TYPE_BY_UPLOAD_KIND[kind], title: file.name }
 }
 
 /** A link's title can't always be scraped — fall back to something based on

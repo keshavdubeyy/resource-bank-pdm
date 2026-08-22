@@ -2,7 +2,7 @@
 
 import { format } from "date-fns"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Image01Icon, Link04Icon, PencilEdit02Icon, Pdf01Icon, UserIcon } from "@hugeicons/core-free-icons"
+import { Link04Icon, PencilEdit02Icon, UserIcon } from "@hugeicons/core-free-icons"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sheet"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { ResourceFavicon } from "@/components/resources/resource-favicon"
-import { guessLinkIconKind } from "@/lib/resources/storage"
+import { getUploadKindIcon, guessLinkIconKind } from "@/lib/resources/storage"
 import { CATEGORY_LABELS, type Resource } from "@/lib/resources/types"
 import { getFaviconUrl, hasMeaningfulDescription } from "@/lib/resources/utils"
 
@@ -51,7 +51,7 @@ function ResourceDetailBody({ resource }: { resource: Resource }) {
                   render={<a href={link.url} target="_blank" rel="noopener noreferrer" />}
                 >
                   <HugeiconsIcon
-                    icon={linkIconKind === "image" ? Image01Icon : linkIconKind === "pdf" ? Pdf01Icon : Link04Icon}
+                    icon={getUploadKindIcon(linkIconKind) ?? Link04Icon}
                     strokeWidth={2}
                     data-icon="inline-start"
                   />

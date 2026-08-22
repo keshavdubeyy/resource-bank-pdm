@@ -1,28 +1,95 @@
+import type { HugeiconsIcon } from "@hugeicons/react"
+import {
+  Csv01Icon,
+  Doc02Icon,
+  Image01Icon,
+  Pdf01Icon,
+  Txt01Icon,
+  Xls02Icon,
+} from "@hugeicons/core-free-icons"
+
 import { createClient } from "@/utils/supabase/client"
 import { notifySupabaseUsageChanged } from "@/lib/usage/client-events"
 
 export const RESOURCE_FILES_BUCKET = "resource-files"
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
-export type UploadKind = "pdf" | "image"
+export type UploadKind = "pdf" | "image" | "xls" | "csv" | "doc" | "txt"
 
 /** Tracks an in-flight (or resolved) upload for a single attachment, independent of form submission. */
 export type UploadStatus = "idle" | "uploading" | "error" | "done"
 
+/** Every extension/MIME combination accepted for upload, grouped by kind —
+ * also doubles as the file picker's `accept` filter and the single source
+ * of truth for what the storage bucket's allowed_mime_types must include. */
 const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"]
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+const XLS_MIME_TYPES = [
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]
+const XLS_EXTENSIONS = [".xls", ".xlsx"]
+const CSV_MIME_TYPES = ["text/csv"]
+const CSV_EXTENSIONS = [".csv"]
+const DOC_MIME_TYPES = [
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]
+const DOC_EXTENSIONS = [".doc", ".docx"]
+const TXT_MIME_TYPES = ["text/plain"]
+const TXT_EXTENSIONS = [".txt"]
+
+/** Suitable as an `<input accept>` value covering every supported upload kind. */
+export const UPLOAD_ACCEPT = [
+  "application/pdf",
+  ...IMAGE_MIME_TYPES,
+  ...XLS_MIME_TYPES,
+  ...XLS_EXTENSIONS,
+  ...CSV_MIME_TYPES,
+  ...CSV_EXTENSIONS,
+  ...DOC_MIME_TYPES,
+  ...DOC_EXTENSIONS,
+  ...TXT_MIME_TYPES,
+].join(",")
 
 export function getUploadKind(file: File): UploadKind | null {
-  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+  const name = file.name.toLowerCase()
+  // Checked before the xls MIME types below — Excel on Windows sometimes
+  // exports .csv with the application/vnd.ms-excel MIME type.
+  if (name.endsWith(".csv") || CSV_MIME_TYPES.includes(file.type)) {
+    return "csv"
+  }
+  if (file.type === "application/pdf" || name.endsWith(".pdf")) {
     return "pdf"
   }
-  if (
-    IMAGE_MIME_TYPES.includes(file.type) ||
-    IMAGE_EXTENSIONS.some((ext) => file.name.toLowerCase().endsWith(ext))
-  ) {
+  if (IMAGE_MIME_TYPES.includes(file.type) || IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))) {
     return "image"
   }
+  if (XLS_MIME_TYPES.includes(file.type) || XLS_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+    return "xls"
+  }
+  if (DOC_MIME_TYPES.includes(file.type) || DOC_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+    return "doc"
+  }
+  if (TXT_MIME_TYPES.includes(file.type) || TXT_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+    return "txt"
+  }
   return null
+}
+
+const UPLOAD_KIND_ICONS = {
+  pdf: Pdf01Icon,
+  image: Image01Icon,
+  xls: Xls02Icon,
+  csv: Csv01Icon,
+  doc: Doc02Icon,
+  txt: Txt01Icon,
+} satisfies Record<UploadKind, Parameters<typeof HugeiconsIcon>[0]["icon"]>
+
+/** Icon for a given upload kind, or null (callers supply their own fallback,
+ * e.g. a generic link icon, for the "no file/not an upload" case). */
+export function getUploadKindIcon(kind: UploadKind | null) {
+  return kind ? UPLOAD_KIND_ICONS[kind] : null
 }
 
 export function isUploadedResourceFileUrl(url: string): boolean {
@@ -49,10 +116,15 @@ function getResourceFilePath(url: string): string | null {
   }
 }
 
-/** For an already-saved storage URL, guesses pdf vs image from its extension (for display only). */
+/** For an already-saved storage URL, guesses the upload kind from its extension (for display only). */
 export function guessUploadKindFromUrl(url: string): UploadKind {
   const lower = url.toLowerCase()
-  return IMAGE_EXTENSIONS.some((ext) => lower.includes(ext)) ? "image" : "pdf"
+  if (CSV_EXTENSIONS.some((ext) => lower.includes(ext))) return "csv"
+  if (IMAGE_EXTENSIONS.some((ext) => lower.includes(ext))) return "image"
+  if (XLS_EXTENSIONS.some((ext) => lower.includes(ext))) return "xls"
+  if (DOC_EXTENSIONS.some((ext) => lower.includes(ext))) return "doc"
+  if (TXT_EXTENSIONS.some((ext) => lower.includes(ext))) return "txt"
+  return "pdf"
 }
 
 /** Picks a display icon for a resource link — pdf/image for uploaded files, null for

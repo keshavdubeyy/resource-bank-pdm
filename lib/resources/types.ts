@@ -18,6 +18,8 @@ export type KnownResourceType =
   | "Community"
   | "PDF"
   | "Image"
+  | "Spreadsheet"
+  | "Document"
   | "Repository"
 
 /** The suggested types plus anything a contributor names themselves — stored as free text.
@@ -116,6 +118,8 @@ export const RESOURCE_TYPES: KnownResourceType[] = [
   "Community",
   "PDF",
   "Image",
+  "Spreadsheet",
+  "Document",
   "Repository",
 ]
 
@@ -126,6 +130,8 @@ export const PROMINENT_RESOURCE_TYPES: KnownResourceType[] = [
   "PDF",
   "Repository",
   "Course",
+  "Spreadsheet",
+  "Document",
 ]
 
 /** Tucked behind "Other" in the type picker — still valid, just less common. */

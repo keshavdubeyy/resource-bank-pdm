@@ -2,14 +2,7 @@
 
 import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  Alert02Icon,
-  Delete02Icon,
-  Image01Icon,
-  Pdf01Icon,
-  Refresh01Icon,
-  Upload01Icon,
-} from "@hugeicons/core-free-icons"
+import { Alert02Icon, Delete02Icon, Refresh01Icon, Upload01Icon } from "@hugeicons/core-free-icons"
 
 import {
   Attachment,
@@ -34,7 +27,13 @@ import { FieldError } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getUploadKind, MAX_UPLOAD_BYTES, type UploadStatus } from "@/lib/resources/storage"
+import {
+  getUploadKind,
+  getUploadKindIcon,
+  MAX_UPLOAD_BYTES,
+  UPLOAD_ACCEPT,
+  type UploadStatus,
+} from "@/lib/resources/storage"
 import { formatBytes } from "@/lib/resources/utils"
 
 export type AttachmentMode = "link" | "upload"
@@ -96,7 +95,7 @@ function PrimaryAttachmentField({
       return
     }
     if (!getUploadKind(selected)) {
-      setPickError("Please choose a PDF or image file.")
+      setPickError("Please choose a PDF, image, spreadsheet, or document file.")
       return
     }
     if (selected.size > MAX_UPLOAD_BYTES) {
@@ -133,7 +132,7 @@ function PrimaryAttachmentField({
       <Tabs value={mode} onValueChange={(value) => handleModeChange(value as AttachmentMode)}>
         <TabsList>
           <TabsTrigger value="link">Add external link</TabsTrigger>
-          <TabsTrigger value="upload">Upload PDF / Image</TabsTrigger>
+          <TabsTrigger value="upload">Upload file</TabsTrigger>
         </TabsList>
 
         <TabsContent value="link" className="pt-2">
@@ -152,7 +151,7 @@ function PrimaryAttachmentField({
           <input
             id={inputId}
             type="file"
-            accept="application/pdf,image/*"
+            accept={UPLOAD_ACCEPT}
             className="sr-only"
             disabled={isUploading}
             onChange={handleFileChange}
@@ -166,11 +165,9 @@ function PrimaryAttachmentField({
                   icon={
                     isUploadError
                       ? Alert02Icon
-                      : uploadKind === "image"
-                        ? Image01Icon
-                        : hasFile
-                          ? Pdf01Icon
-                          : Upload01Icon
+                      : hasFile
+                        ? getUploadKindIcon(uploadKind) ?? Upload01Icon
+                        : Upload01Icon
                   }
                   strokeWidth={2}
                 />
@@ -185,7 +182,7 @@ function PrimaryAttachmentField({
                     ? (uploadError ?? "Upload failed — try again.")
                     : hasFile
                       ? displaySize
-                      : "PDF or image, up to 5 MB"}
+                      : "PDF, image, spreadsheet, or document — up to 5 MB"}
               </AttachmentDescription>
             </AttachmentContent>
             {hasFile ? (

@@ -2,9 +2,10 @@
 
 import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Image01Icon, Link04Icon, Pdf01Icon } from "@hugeicons/core-free-icons"
+import { Link04Icon } from "@hugeicons/core-free-icons"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { getUploadKindIcon, type UploadKind } from "@/lib/resources/storage"
 
 /** Google's favicon service doesn't error for a domain it has no icon for —
  * it returns a generic placeholder as a "successful" image load, so onError
@@ -23,7 +24,7 @@ function ResourceFavicon({
   iconKind,
 }: {
   avatarImageUrl: string | null
-  iconKind: "pdf" | "image" | null
+  iconKind: UploadKind | null
 }) {
   const [imageFailed, setImageFailed] = React.useState(false)
   const showImage = !!avatarImageUrl && !imageFailed
@@ -53,7 +54,7 @@ function ResourceFavicon({
     <Avatar size="sm" className="after:border-0">
       <AvatarFallback>
         <HugeiconsIcon
-          icon={iconKind === "image" ? Image01Icon : iconKind === "pdf" ? Pdf01Icon : Link04Icon}
+          icon={getUploadKindIcon(iconKind) ?? Link04Icon}
           strokeWidth={2}
           className="size-3.5"
         />

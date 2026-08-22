@@ -6,10 +6,9 @@ import {
   Add01Icon,
   Alert02Icon,
   Delete02Icon,
-  Image01Icon,
   Link04Icon,
-  Pdf01Icon,
   Refresh01Icon,
+  Upload01Icon,
 } from "@hugeicons/core-free-icons"
 
 import {
@@ -29,13 +28,16 @@ import { Spinner } from "@/components/ui/spinner"
 import {
   deleteUploadedResourceFiles,
   getUploadKind,
+  getUploadKindIcon,
   MAX_UPLOAD_BYTES,
   uploadResourceFile,
+  UPLOAD_ACCEPT,
+  type UploadKind,
   type UploadStatus,
 } from "@/lib/resources/storage"
 import { formatBytes } from "@/lib/resources/utils"
 
-export type AdditionalAttachmentKind = "link" | "pdf" | "image"
+export type AdditionalAttachmentKind = "link" | UploadKind
 
 export interface AdditionalAttachmentRow {
   id: string
@@ -43,11 +45,20 @@ export interface AdditionalAttachmentRow {
   label: string
   /** For "link" rows, the URL. For file rows, the uploaded file's URL — empty while the upload is in flight. */
   url: string
-  /** A newly picked file pending/uploading — only set for unsaved pdf/image rows. */
+  /** A newly picked file pending/uploading — only set for unsaved file rows. */
   file: File | null
-  /** Only meaningful for pdf/image rows — link rows stay "done". */
+  /** Only meaningful for file rows — link rows stay "done". */
   uploadStatus: UploadStatus
   uploadError: string | null
+}
+
+const KIND_LABELS: Record<UploadKind, string> = {
+  pdf: "PDF",
+  image: "Image",
+  xls: "Excel",
+  csv: "CSV",
+  doc: "Word",
+  txt: "Text",
 }
 
 function createRowId(): string {
@@ -57,15 +68,11 @@ function createRowId(): string {
 }
 
 function kindIcon(kind: AdditionalAttachmentKind) {
-  if (kind === "pdf") return Pdf01Icon
-  if (kind === "image") return Image01Icon
-  return Link04Icon
+  return kind === "link" ? Link04Icon : getUploadKindIcon(kind) ?? Link04Icon
 }
 
 function kindLabel(kind: AdditionalAttachmentKind) {
-  if (kind === "pdf") return "PDF"
-  if (kind === "image") return "Image"
-  return "Link"
+  return kind === "link" ? "Link" : KIND_LABELS[kind]
 }
 
 function AdditionalAttachmentsField({
@@ -110,11 +117,8 @@ function AdditionalAttachmentsField({
     ])
   }
 
-  const promptForFile = (kind: "pdf" | "image") => {
+  const promptForFile = () => {
     setExpanded(true)
-    if (fileInputRef.current) {
-      fileInputRef.current.accept = kind === "pdf" ? "application/pdf" : "image/*"
-    }
     fileInputRef.current?.click()
   }
 
@@ -157,7 +161,7 @@ function AdditionalAttachmentsField({
 
     const kind = getUploadKind(selected)
     if (!kind) {
-      setFileError("Please choose a PDF or image file.")
+      setFileError("Please choose a PDF, image, spreadsheet, or document file.")
       return
     }
     if (selected.size > MAX_UPLOAD_BYTES) {
@@ -197,7 +201,7 @@ function AdditionalAttachmentsField({
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf,image/*"
+        accept={UPLOAD_ACCEPT}
         className="sr-only"
         onChange={handleFileChange}
       />
@@ -297,13 +301,9 @@ function AdditionalAttachmentsField({
           <HugeiconsIcon icon={Link04Icon} strokeWidth={2} data-icon="inline-start" />
           Link
         </Button>
-        <Button type="button" variant="outline" size="lg" onClick={() => promptForFile("pdf")}>
-          <HugeiconsIcon icon={Pdf01Icon} strokeWidth={2} data-icon="inline-start" />
-          PDF
-        </Button>
-        <Button type="button" variant="outline" size="lg" onClick={() => promptForFile("image")}>
-          <HugeiconsIcon icon={Image01Icon} strokeWidth={2} data-icon="inline-start" />
-          Image
+        <Button type="button" variant="outline" size="lg" onClick={promptForFile}>
+          <HugeiconsIcon icon={Upload01Icon} strokeWidth={2} data-icon="inline-start" />
+          File
         </Button>
       </div>
     </div>
