@@ -1,5 +1,7 @@
 "use client"
 
+import { useState } from "react"
+
 import {
   Area,
   AreaChart,
@@ -16,6 +18,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { AdminAnalyticsPoint } from "@/lib/admin/metrics"
 
 const chartConfig = {
@@ -33,25 +36,44 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat("en").format(value)
 }
 
-function AnalyticsTrendCard({
-  title,
-  description,
+const RANGES = [
+  {
+    value: "daily",
+    label: "Daily",
+    description: "Unique visitors and successful login events over the last 14 days.",
+    variant: "area" as const,
+  },
+  {
+    value: "weekly",
+    label: "Weekly",
+    description: "Unique visitors and successful login events over the last 12 weeks.",
+    variant: "area" as const,
+  },
+  {
+    value: "monthly",
+    label: "Monthly",
+    description: "Unique visitors and successful login events over the last 12 months.",
+    variant: "line" as const,
+  },
+  {
+    value: "yearly",
+    label: "Yearly",
+    description: "Unique visitors and successful login events over the last 5 years.",
+    variant: "line" as const,
+  },
+]
+
+function AnalyticsTrendPanel({
   data,
-  variant = "area",
+  variant,
 }: {
-  title: string
-  description: string
   data: AdminAnalyticsPoint[]
-  variant?: "area" | "line"
+  variant: "area" | "line"
 }) {
   const Chart = variant === "area" ? AreaChart : LineChart
 
   return (
-    <section className="rounded-lg border bg-card p-4">
-      <div className="mb-4">
-        <h2 className="text-base font-semibold">{title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      </div>
+    <div>
       <ChartContainer
         config={chartConfig}
         className="h-64 w-full"
@@ -136,7 +158,7 @@ function AnalyticsTrendCard({
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -151,31 +173,45 @@ function AnalyticsCharts({
   monthly: AdminAnalyticsPoint[]
   yearly: AdminAnalyticsPoint[]
 }) {
+  const dataByRange: Record<string, AdminAnalyticsPoint[]> = {
+    daily,
+    weekly,
+    monthly,
+    yearly,
+  }
+  const [activeRange, setActiveRange] = useState<string>("daily")
+  const activeDescription = RANGES.find(
+    (range) => range.value === activeRange
+  )?.description
+
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <AnalyticsTrendCard
-        title="Daily Visitors And Logins"
-        description="Unique visitors and successful login events over the last 14 days."
-        data={daily}
-      />
-      <AnalyticsTrendCard
-        title="Weekly Visitors And Logins"
-        description="Unique visitors and successful login events over the last 12 weeks."
-        data={weekly}
-      />
-      <AnalyticsTrendCard
-        title="Monthly Visitors And Logins"
-        description="Unique visitors and successful login events over the last 12 months."
-        data={monthly}
-        variant="line"
-      />
-      <AnalyticsTrendCard
-        title="Yearly Visitors And Logins"
-        description="Unique visitors and successful login events over the last 5 years."
-        data={yearly}
-        variant="line"
-      />
-    </div>
+    <section className="rounded-lg border bg-card p-4">
+      <Tabs value={activeRange} onValueChange={setActiveRange}>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Visitors And Logins</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activeDescription}
+            </p>
+          </div>
+          <TabsList>
+            {RANGES.map((range) => (
+              <TabsTrigger key={range.value} value={range.value}>
+                {range.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+        {RANGES.map((range) => (
+          <TabsContent key={range.value} value={range.value}>
+            <AnalyticsTrendPanel
+              data={dataByRange[range.value]}
+              variant={range.variant}
+            />
+          </TabsContent>
+        ))}
+      </Tabs>
+    </section>
   )
 }
 
