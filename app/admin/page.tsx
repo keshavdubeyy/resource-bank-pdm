@@ -2,6 +2,13 @@ import { AnalyticsCharts } from "@/components/admin/analytics-charts"
 import { PageHeader } from "@/components/shared/page-header"
 import { Badge } from "@/components/ui/badge"
 import { DatabaseErrorFallback } from "@/components/shared/database-error-fallback"
+import { AdminLoginForm } from "@/components/admin/admin-login-form"
+import { Button } from "@/components/ui/button"
+import { adminLogoutAction } from "@/lib/admin/actions"
+import {
+  isAdminAuthenticated,
+  isAdminPasswordConfigured,
+} from "@/lib/admin/auth"
 import { getAdminMetrics, type AdminMetricItem } from "@/lib/admin/metrics"
 
 function formatNumber(value: number): string {
@@ -137,6 +144,25 @@ function RankedList({
 }
 
 export default async function AdminPage() {
+  if (!(await isAdminAuthenticated())) {
+    return (
+      <div className="mx-auto flex max-w-sm flex-col gap-6 px-4 py-16 sm:px-6">
+        <PageHeader
+          title="Admin"
+          description="Enter the admin password to continue."
+        />
+        {isAdminPasswordConfigured() ? (
+          <AdminLoginForm />
+        ) : (
+          <p className="text-sm text-destructive">
+            ADMIN_PASSWORD is not set on the server, so admin access is
+            disabled.
+          </p>
+        )}
+      </div>
+    )
+  }
+
   let result: Awaited<ReturnType<typeof getAdminMetrics>> | { error: Error }
 
   try {
@@ -176,10 +202,17 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:gap-8 sm:px-6 sm:py-6 lg:px-8">
-      <PageHeader
-        title="Admin"
-        description="Track whether the PDM resource bank is growing through student contribution instead of private gatekeeping."
-      />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader
+          title="Admin"
+          description="Track whether the PDM resource bank is growing through student contribution instead of private gatekeeping."
+        />
+        <form action={adminLogoutAction}>
+          <Button type="submit" variant="outline" size="sm">
+            Lock
+          </Button>
+        </form>
+      </div>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
